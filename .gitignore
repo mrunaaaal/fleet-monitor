@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Environment (commit .env.example, never .env)
+.env
+.env.local
+.env.*.local
+
+# Secrets / certs (design doc §11)
+nginx/certs/
+
+# Build output
+dist/
+build/
+
+# Generated eval artifacts
+evals/fixtures/
+evals/results/
+
+# Installed agent skills tooling (third-party, not project code)
+.agents/
+.claude/skills/
+
+# Logs and OS cruft
+*.log
+.DS_Store

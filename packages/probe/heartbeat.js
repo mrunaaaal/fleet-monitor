@@ -11,12 +11,13 @@ export function startHeartbeat({
   onTick = () => {},
   shipHeartbeat,
   serviceName,
+  tier,
 } = {}) {
   return startInterval(intervalMs, () => {
     onTick();
     if (shipHeartbeat) {
       Promise.resolve()
-        .then(() => shipHeartbeat({ service: serviceName }))
+        .then(() => shipHeartbeat({ service: serviceName, ...(tier !== undefined ? { tier } : {}) }))
         .catch((err) => console.error(`[probe] failed to ship heartbeat for ${serviceName}:`, err.message));
     }
   });

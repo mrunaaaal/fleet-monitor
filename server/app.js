@@ -1,17 +1,19 @@
 import Fastify from 'fastify';
 import { createInfluxClient } from './db/influx.js';
 import { createRedisClient } from './db/redis.js';
+import { createPostgresClient } from './db/postgres.js';
 import { createMetricsIngestHandler } from './ingest/metrics.js';
 import { createHeartbeatIngestHandler } from './ingest/heartbeat.js';
 
 export function buildApp({
   influx = createInfluxClient(),
   redis = createRedisClient(),
+  postgres = createPostgresClient(),
   heartbeatTtlSeconds,
 } = {}) {
   const app = Fastify({ logger: true });
   const ingestMetrics = createMetricsIngestHandler({ influx });
-  const ingestHeartbeat = createHeartbeatIngestHandler({ redis, ttlSeconds: heartbeatTtlSeconds });
+  const ingestHeartbeat = createHeartbeatIngestHandler({ redis, postgres, ttlSeconds: heartbeatTtlSeconds });
 
   app.get('/health', async () => ({ status: 'ok' }));
 

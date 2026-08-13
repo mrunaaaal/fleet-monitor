@@ -30,6 +30,23 @@ test('ships a heartbeat tagged with the service name on each tick', async (t) =>
   assert.deepEqual(shipped, [{ service: 'web' }]);
 });
 
+test('ships a heartbeat tagged with the tier when one is given', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const shipped = [];
+
+  const stop = startHeartbeat({
+    serviceName: 'web',
+    tier: 'user-facing',
+    shipHeartbeat: async (payload) => shipped.push(payload),
+  });
+
+  t.mock.timers.tick(HEARTBEAT_INTERVAL_MS);
+  await new Promise((resolve) => setImmediate(resolve));
+  stop();
+
+  assert.deepEqual(shipped, [{ service: 'web', tier: 'user-facing' }]);
+});
+
 test('does not throw when shipHeartbeat rejects', async (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const stop = startHeartbeat({

@@ -68,6 +68,24 @@ test('ships heartbeats tagged with serviceName', async (t) => {
   assert.equal(shipped[0].service, 'web');
 });
 
+test('ships heartbeats tagged with tier when one is given', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const shipped = [];
+
+  const probe = startProbe({
+    serviceName: 'web',
+    tier: 'user-facing',
+    shipHeartbeat: async (payload) => shipped.push(payload),
+  });
+
+  t.mock.timers.tick(60_000);
+  await new Promise((resolve) => setImmediate(resolve));
+  probe.stop();
+
+  assert.ok(shipped.length >= 1);
+  assert.equal(shipped[0].tier, 'user-facing');
+});
+
 test('works with no hooks at all', (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const probe = startProbe({ serviceName: 'web' });

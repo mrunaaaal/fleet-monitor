@@ -9,6 +9,7 @@ import { startHeartbeat } from './heartbeat.js';
 // given; logs/deps ship with their own ingest tickets.
 export function startProbe({
   serviceName,
+  tier,
   downstream = [],
   hooks = {},
   shipMetrics,
@@ -26,7 +27,7 @@ export function startProbe({
     host,
   });
   const stopDeps = startDepsReporter({ downstream, onTick: hooks.onDepsTick });
-  const stopHeartbeat = startHeartbeat({ onTick: hooks.onHeartbeatTick, shipHeartbeat, serviceName });
+  const stopHeartbeat = startHeartbeat({ onTick: hooks.onHeartbeatTick, shipHeartbeat, serviceName, tier });
   const logger = startLogger({ onFlush: hooks.onLogFlush });
 
   return {

@@ -78,6 +78,7 @@ export function createService(
 
   const probe = startProbe({
     serviceName: name,
+    tier,
     downstream: downstream.map(downstreamName),
     hooks: probeHooks,
     shipMetrics,

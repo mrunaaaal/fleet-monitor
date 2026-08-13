@@ -4,6 +4,10 @@ import { buildApp } from '../app.js';
 import { createRedisClient } from '../db/redis.js';
 import { createLivenessQuery } from '../query/liveness.js';
 
+// /v1/heartbeat also upserts the Postgres registry (#6) — stubbed here
+// since this seam is about liveness, not the registry, which #6 covers.
+const postgres = { query: async () => {} };
+
 // Seam 1 (spec issue #1, "Testing Decisions" section): post a
 // probe-shaped payload to the ingest endpoint, read it back through the
 // query function, assert the result. Runs against a real Redis — no
@@ -13,12 +17,16 @@ import { createLivenessQuery } from '../query/liveness.js';
 // redis://localhost:6379).
 test('Seam 1: a heartbeat posted to /v1/heartbeat reports up, then reports down once the TTL expires', async () => {
   const redis = createRedisClient();
-  const app = buildApp({ redis, heartbeatTtlSeconds: 1 });
+  const app = buildApp({ redis, postgres, heartbeatTtlSeconds: 1 });
   const queryLiveness = createLivenessQuery({ redis });
 
   const service = `seam1-web-${Date.now()}`;
 
-  const res = await app.inject({ method: 'POST', url: '/v1/heartbeat', payload: { service } });
+  const res = await app.inject({
+    method: 'POST',
+    url: '/v1/heartbeat',
+    payload: { service, tier: 'user-facing' },
+  });
   assert.equal(res.statusCode, 202);
 
   const upResult = await queryLiveness({ services: [service] });

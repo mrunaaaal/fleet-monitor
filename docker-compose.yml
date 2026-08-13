@@ -1,3 +1,14 @@
+x-mesh-service: &mesh-service
+  build:
+    context: .
+    dockerfile: mesh/Dockerfile
+  healthcheck:
+    test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/health"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+    start_period: 5s
+
 services:
   nginx:
     build: ./nginx
@@ -47,6 +58,100 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+
+  # Demo mesh (fleet-monitor-docs.md §3) — eight services built from
+  # mesh/shared/service.js, parameterized by mesh/config.js. Host ports
+  # match each service's `port` in that config, so chaos can be induced
+  # directly (e.g. `curl -X POST localhost:4004/chaos -d '{"mode":"dead"}'`)
+  # without going through nginx, which only proxies /api to fastify.
+  session-store:
+    <<: *mesh-service
+    environment:
+      SERVICE_NAME: session-store
+    ports:
+      - "4007:3000"
+
+  ledger-db:
+    <<: *mesh-service
+    environment:
+      SERVICE_NAME: ledger-db
+    ports:
+      - "4008:3000"
+
+  auth-service:
+    <<: *mesh-service
+    environment:
+      SERVICE_NAME: auth-service
+    ports:
+      - "4004:3000"
+    depends_on:
+      session-store:
+        condition: service_healthy
+
+  payments:
+    <<: *mesh-service
+    environment:
+      SERVICE_NAME: payments
+    ports:
+      - "4005:3000"
+    depends_on:
+      ledger-db:
+        condition: service_healthy
+
+  inventory:
+    <<: *mesh-service
+    environment:
+      SERVICE_NAME: inventory
+    ports:
+      - "4006:3000"
+    depends_on:
+      ledger-db:
+        condition: service_healthy
+
+  api-gateway:
+    <<: *mesh-service
+    environment:
+      SERVICE_NAME: api-gateway
+    ports:
+      - "4003:3000"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      payments:
+        condition: service_healthy
+      inventory:
+        condition: service_healthy
+
+  web:
+    <<: *mesh-service
+    environment:
+      SERVICE_NAME: web
+    ports:
+      - "4001:3000"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
+  checkout:
+    <<: *mesh-service
+    environment:
+      SERVICE_NAME: checkout
+    ports:
+      - "4002:3000"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
+  traffic-generator:
+    build:
+      context: .
+      dockerfile: mesh/Dockerfile
+    command: ["node", "mesh/run-traffic-generator.js"]
+    depends_on:
+      web:
+        condition: service_healthy
+      checkout:
+        condition: service_healthy
 
   postgres:
     image: postgres:16-alpine

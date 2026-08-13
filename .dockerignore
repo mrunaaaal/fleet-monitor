@@ -1,0 +1,6 @@
+# Applies to build contexts rooted at the repo root (the mesh services,
+# which need both mesh/ and packages/probe/ in one context). server/ and
+# nginx/ build with their own directory as context and have no bearing here.
+**/node_modules
+**/test
+.git

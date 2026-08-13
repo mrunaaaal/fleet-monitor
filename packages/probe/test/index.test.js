@@ -51,6 +51,23 @@ test('exposes recordRequest and ships metrics tagged with serviceName/host', asy
   assert.equal(shipped[0].host, 'local');
 });
 
+test('ships heartbeats tagged with serviceName', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const shipped = [];
+
+  const probe = startProbe({
+    serviceName: 'web',
+    shipHeartbeat: async (payload) => shipped.push(payload),
+  });
+
+  t.mock.timers.tick(60_000);
+  await new Promise((resolve) => setImmediate(resolve));
+  probe.stop();
+
+  assert.ok(shipped.length >= 1);
+  assert.equal(shipped[0].service, 'web');
+});
+
 test('works with no hooks at all', (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const probe = startProbe({ serviceName: 'web' });

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createService } from '../shared/service.js';
 import { METRICS_INTERVAL_MS } from '../../packages/probe/metrics.js';
+import { HEARTBEAT_INTERVAL_MS } from '../../packages/probe/heartbeat.js';
 
 async function listen(app) {
   await app.listen({ host: '127.0.0.1', port: 0 });
@@ -204,10 +205,36 @@ test('ships sampled metrics to POST {ingestUrl}/v1/metrics via fetchImpl', async
   await new Promise((resolve) => setImmediate(resolve));
   await app.close();
 
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, 'http://fastify:3000/v1/metrics');
-  assert.equal(calls[0].opts.method, 'POST');
-  const body = JSON.parse(calls[0].opts.body);
+  const metricsCalls = calls.filter((c) => c.url === 'http://fastify:3000/v1/metrics');
+  assert.equal(metricsCalls.length, 1);
+  assert.equal(metricsCalls[0].opts.method, 'POST');
+  const body = JSON.parse(metricsCalls[0].opts.body);
+  assert.equal(body.service, 'web');
+});
+
+test('ships heartbeats to POST {ingestUrl}/v1/heartbeat via fetchImpl', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const calls = [];
+  const app = createService(
+    { name: 'web', tier: 'user-facing', downstream: [] },
+    {
+      ingestUrl: 'http://fastify:3000',
+      fetchImpl: async (url, opts) => {
+        calls.push({ url: String(url), opts });
+        return { ok: true, status: 202 };
+      },
+    },
+  );
+  await app.ready();
+
+  t.mock.timers.tick(HEARTBEAT_INTERVAL_MS);
+  await new Promise((resolve) => setImmediate(resolve));
+  await app.close();
+
+  const heartbeatCalls = calls.filter((c) => c.url === 'http://fastify:3000/v1/heartbeat');
+  assert.equal(heartbeatCalls.length, 1);
+  assert.equal(heartbeatCalls[0].opts.method, 'POST');
+  const body = JSON.parse(heartbeatCalls[0].opts.body);
   assert.equal(body.service, 'web');
 });
 

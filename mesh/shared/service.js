@@ -30,6 +30,7 @@ export function createService(
     host = DEFAULT_HOST,
     fetchImpl = fetch,
     shipMetrics = defaultShipMetrics(ingestUrl, fetchImpl),
+    shipHeartbeat = defaultShipHeartbeat(ingestUrl, fetchImpl),
   } = {},
 ) {
   const { name, tier, downstream = [] } = serviceConfig;
@@ -81,6 +82,7 @@ export function createService(
     hooks: probeHooks,
     shipMetrics,
     host,
+    shipHeartbeat,
   });
   app.addHook('onClose', async () => probe.stop());
   app.addHook('onResponse', async (req, reply) => {
@@ -129,5 +131,16 @@ function defaultShipMetrics(ingestUrl, fetchImpl) {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`metrics ingest responded ${res.status}`);
+  };
+}
+
+function defaultShipHeartbeat(ingestUrl, fetchImpl) {
+  return async function shipHeartbeat(payload) {
+    const res = await fetchImpl(`${ingestUrl}/v1/heartbeat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`heartbeat ingest responded ${res.status}`);
   };
 }

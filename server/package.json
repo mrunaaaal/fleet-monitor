@@ -1,0 +1,14 @@
+{
+  "name": "fleet-monitor-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "fastify": "^5.2.0"
+  }
+}

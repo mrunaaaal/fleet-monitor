@@ -8,6 +8,12 @@ const DEFAULT_SLOW_DELAY_MS = 3_000;
 // observed as a delay rather than a caller-side timeout, but stay bounded
 // so a `dead` downstream target can't hang a caller forever.
 const DEFAULT_DOWNSTREAM_TIMEOUT_MS = 5_000;
+const DEFAULT_INGEST_URL = 'http://fastify:3000';
+// Fixed rather than per-container os.hostname(): the InfluxDB `host` tag
+// is bounded at 1 for this single-node learning platform (fleet-monitor-
+// docs.md §4.4). Auto-detecting each container's hostname would make it
+// unbounded across the mesh.
+const DEFAULT_HOST = 'local';
 
 // Builds one mesh service from a topology entry (mesh/config.js). All
 // eight services are the same factory call with a different config —
@@ -20,6 +26,10 @@ export function createService(
     downstreamTimeoutMs = DEFAULT_DOWNSTREAM_TIMEOUT_MS,
     probeHooks,
     logger = false,
+    ingestUrl = process.env.INGEST_URL ?? DEFAULT_INGEST_URL,
+    host = DEFAULT_HOST,
+    fetchImpl = fetch,
+    shipMetrics = defaultShipMetrics(ingestUrl, fetchImpl),
   } = {},
 ) {
   const { name, tier, downstream = [] } = serviceConfig;
@@ -69,8 +79,14 @@ export function createService(
     serviceName: name,
     downstream: downstream.map(downstreamName),
     hooks: probeHooks,
+    shipMetrics,
+    host,
   });
   app.addHook('onClose', async () => probe.stop());
+  app.addHook('onResponse', async (req, reply) => {
+    if (req.routeOptions?.url !== '/work') return;
+    probe.recordRequest({ latencyMs: reply.elapsedTime, isError: reply.statusCode >= 500 });
+  });
 
   return app;
 }
@@ -103,4 +119,15 @@ async function callDownstream(entry, resolveUrl, timeoutMs) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function defaultShipMetrics(ingestUrl, fetchImpl) {
+  return async function shipMetrics(payload) {
+    const res = await fetchImpl(`${ingestUrl}/v1/metrics`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`metrics ingest responded ${res.status}`);
+  };
 }

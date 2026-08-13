@@ -31,6 +31,26 @@ test('wires metrics, deps, heartbeat, and logger together', (t) => {
   assert.deepEqual(events.logs, [['hello']]);
 });
 
+test('exposes recordRequest and ships metrics tagged with serviceName/host', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const shipped = [];
+
+  const probe = startProbe({
+    serviceName: 'web',
+    host: 'local',
+    shipMetrics: async (payload) => shipped.push(payload),
+  });
+
+  probe.recordRequest({ latencyMs: 12, isError: false });
+  t.mock.timers.tick(60_000);
+  await new Promise((resolve) => setImmediate(resolve));
+  probe.stop();
+
+  assert.ok(shipped.length >= 1);
+  assert.equal(shipped[0].service, 'web');
+  assert.equal(shipped[0].host, 'local');
+});
+
 test('works with no hooks at all', (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const probe = startProbe({ serviceName: 'web' });

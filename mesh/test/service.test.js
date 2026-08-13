@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createService } from '../shared/service.js';
+import { METRICS_INTERVAL_MS } from '../../packages/probe/metrics.js';
 
 async function listen(app) {
   await app.listen({ host: '127.0.0.1', port: 0 });
@@ -182,6 +183,54 @@ test('routesByFeature restricts which downstream targets a feature call reaches'
   await gateway.close();
   await auth.close();
   await payments.close();
+});
+
+test('ships sampled metrics to POST {ingestUrl}/v1/metrics via fetchImpl', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const calls = [];
+  const app = createService(
+    { name: 'web', tier: 'user-facing', downstream: [] },
+    {
+      ingestUrl: 'http://fastify:3000',
+      fetchImpl: async (url, opts) => {
+        calls.push({ url: String(url), opts });
+        return { ok: true, status: 202 };
+      },
+    },
+  );
+  await app.ready();
+
+  t.mock.timers.tick(METRICS_INTERVAL_MS);
+  await new Promise((resolve) => setImmediate(resolve));
+  await app.close();
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://fastify:3000/v1/metrics');
+  assert.equal(calls[0].opts.method, 'POST');
+  const body = JSON.parse(calls[0].opts.body);
+  assert.equal(body.service, 'web');
+});
+
+test('records /work request latency and errors into the metrics shipped for the interval', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const shipped = [];
+  const app = createService(
+    { name: 'ledger-db', tier: 'datastore', downstream: [] },
+    { shipMetrics: async (payload) => shipped.push(payload) },
+  );
+  await app.ready();
+
+  await app.inject({ method: 'GET', url: '/work' });
+  await setChaos(app, 'error');
+  await app.inject({ method: 'GET', url: '/work' });
+
+  t.mock.timers.tick(METRICS_INTERVAL_MS);
+  await new Promise((resolve) => setImmediate(resolve));
+  await app.close();
+
+  assert.equal(shipped.length, 1);
+  assert.equal(shipped[0].error_rate, 0.5);
+  assert.ok(shipped[0].req_per_sec > 0);
 });
 
 test('wires a probe for the service and stops it on close', async () => {

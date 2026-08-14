@@ -7,8 +7,9 @@ import { createNeo4jClient } from './db/neo4j.js';
 import { createMetricsIngestHandler } from './ingest/metrics.js';
 import { createHeartbeatIngestHandler } from './ingest/heartbeat.js';
 import { createLogsIngestHandler } from './ingest/logs.js';
+import { createNginxLogsIngestHandler } from './ingest/nginx-logs.js';
 import { createTopologyIngestHandler } from './ingest/topology.js';
-import { startFlusher } from './ingest/flusher.js';
+import { startFlusher, NGINX_LOGBUF_KEY } from './ingest/flusher.js';
 
 export function buildApp({
   influx = createInfluxClient(),
@@ -34,10 +35,19 @@ export function buildApp({
     clickhouse,
     ...(logsFlushIntervalMs !== undefined ? { intervalMs: logsFlushIntervalMs } : {}),
   });
+  const nginxLogsFlusher = startFlusher({
+    redis: redisClient,
+    clickhouse,
+    bufferKey: NGINX_LOGBUF_KEY,
+    table: 'nginx_logs',
+    ...(logsFlushIntervalMs !== undefined ? { intervalMs: logsFlushIntervalMs } : {}),
+  });
   const ingestLogs = createLogsIngestHandler({ redis: redisClient, flusher });
+  const ingestNginxLogs = createNginxLogsIngestHandler({ redis: redisClient, flusher: nginxLogsFlusher });
   const ingestTopology = createTopologyIngestHandler({ neo4j });
   app.addHook('onClose', async () => {
     flusher.stop();
+    nginxLogsFlusher.stop();
     if (ownsRedis) await redisClient.close();
   });
 
@@ -68,6 +78,17 @@ export function buildApp({
   app.post('/v1/logs', async (req, reply) => {
     try {
       await ingestLogs(req.body ?? {});
+    } catch (err) {
+      reply.code(400);
+      return { error: err.message };
+    }
+    reply.code(202);
+    return { status: 'accepted' };
+  });
+
+  app.post('/v1/nginx-logs', async (req, reply) => {
+    try {
+      await ingestNginxLogs(req.body ?? {});
     } catch (err) {
       reply.code(400);
       return { error: err.message };

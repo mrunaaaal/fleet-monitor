@@ -17,6 +17,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/certs:/etc/nginx/certs
+      - nginx_access_logs:/var/log/nginx
     depends_on:
       fastify:
         condition: service_healthy
@@ -26,6 +27,23 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+
+  # Edge log ingest (fleet-monitor-docs.md §12.2): tails nginx's JSON access
+  # log from the shared volume and ships batches to POST /v1/nginx-logs.
+  # Reuses the fastify image since the tailer has no deps beyond node core.
+  nginx-log-tailer:
+    build: ./server
+    command: ["node", "nginx-log-tailer.js"]
+    environment:
+      INGEST_URL: http://fastify:3000
+      ACCESS_LOG_PATH: /var/log/nginx/access.log
+    volumes:
+      - nginx_access_logs:/var/log/nginx:ro
+    depends_on:
+      fastify:
+        condition: service_healthy
+      nginx:
+        condition: service_healthy
 
   fastify:
     build: ./server
@@ -256,3 +274,4 @@ volumes:
   clickhouse_data:
   influxdb_data:
   neo4j_data:
+  nginx_access_logs:

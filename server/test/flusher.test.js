@@ -35,6 +35,18 @@ test('flushOnce LPOPs a batch and inserts it into ClickHouse as parsed rows', as
   assert.deepEqual(flushed, [2]);
 });
 
+test('flushOnce reads bufferKey and writes to table when overridden', async () => {
+  const raw = ['{"path":"/api/health","status":200}'];
+  const { redis, clickhouse, calls } = fakeStores(raw);
+  const flusher = startFlusher({ redis, clickhouse, bufferKey: 'nginxlogbuf', table: 'nginx_logs', batchSize: 1000 });
+
+  await flusher.flushOnce();
+  flusher.stop();
+
+  assert.deepEqual(calls.lpopCount, [{ key: 'nginxlogbuf', count: 1000 }]);
+  assert.equal(calls.insertRows[0].table, 'nginx_logs');
+});
+
 test('flushOnce is a no-op when the buffer is empty', async () => {
   const { redis, clickhouse, calls } = fakeStores([]);
   const flushed = [];

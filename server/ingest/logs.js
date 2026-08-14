@@ -1,4 +1,5 @@
 import { LOGBUF_KEY, FLUSH_BATCH_SIZE } from './flusher.js';
+import { toClickhouseTimestamp } from '../db/clickhouse-timestamp.js';
 
 const DEFAULT_LEVEL = 'info';
 
@@ -18,12 +19,6 @@ export function normalizeLogEntry(service, line) {
     message: String(raw.message),
     trace_id: raw.trace_id ?? '',
   };
-}
-
-// ClickHouse's default (non-best-effort) DateTime64 JSON parsing expects
-// 'YYYY-MM-DD HH:MM:SS.mmm', not ISO 8601's 'T'/'Z' separators.
-function toClickhouseTimestamp(value) {
-  return new Date(value).toISOString().replace('T', ' ').replace('Z', '');
 }
 
 // RPUSHes the batch onto `logbuf` and returns fast (fleet-monitor-docs.md

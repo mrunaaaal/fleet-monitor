@@ -1,8 +1,9 @@
 export const FLUSH_INTERVAL_MS = 2_000;
 export const FLUSH_BATCH_SIZE = 1_000;
 export const LOGBUF_KEY = 'logbuf';
+export const NGINX_LOGBUF_KEY = 'nginxlogbuf';
 
-// Drains `logbuf` into ClickHouse on a 2s-or-1000-entries trigger
+// Drains `bufferKey` into ClickHouse on a 2s-or-1000-entries trigger
 // (fleet-monitor-docs.md §5.2): one INSERT per flush, never one per line.
 // ClickHouse writes each INSERT as a new on-disk part and merges parts in
 // the background — one insert per log line produces a merge queue that
@@ -10,18 +11,22 @@ export const LOGBUF_KEY = 'logbuf';
 // size trigger is driven by the ingest handler calling flushOnce() eagerly
 // when the buffer crosses batchSize; the timer here covers the time
 // trigger and otherwise just drains whatever accumulated since the last
-// tick (a no-op when the buffer is empty).
+// tick (a no-op when the buffer is empty). Reused as-is for nginx_logs
+// (fleet-monitor-docs.md §12.2) by pointing bufferKey/table at the edge
+// log buffer instead of the defaults.
 export function startFlusher({
   redis,
   clickhouse,
+  bufferKey = LOGBUF_KEY,
+  table = 'logs',
   intervalMs = FLUSH_INTERVAL_MS,
   batchSize = FLUSH_BATCH_SIZE,
   onFlush = () => {},
 } = {}) {
   async function flushOnce() {
-    const raw = await redis.lpopCount(LOGBUF_KEY, batchSize);
+    const raw = await redis.lpopCount(bufferKey, batchSize);
     if (raw.length === 0) return;
-    await clickhouse.insertRows('logs', raw.map((entry) => JSON.parse(entry)));
+    await clickhouse.insertRows(table, raw.map((entry) => JSON.parse(entry)));
     onFlush(raw.length);
   }
 

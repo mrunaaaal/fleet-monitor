@@ -14,6 +14,11 @@ import { createListServicesQuery } from './query/services.js';
 import { createMetricsQuery } from './query/metrics.js';
 import { createLivenessQuery } from './query/liveness.js';
 import { createBlastRadiusQuery, createGraphQuery } from './query/topology.js';
+import { createPersistInvestigationQuery } from './query/investigations.js';
+import { createAgentTools } from './agent/index.js';
+import { createInvestigationLoop } from './agent/loop.js';
+import { createAnthropicModelClient } from './agent/model-client.js';
+import { buildSystemPrompt } from './agent/system-prompt.js';
 
 // Query-string values arrive as strings or are absent; queryMetrics wants
 // either a real number or undefined (to fall through to its own default).
@@ -29,6 +34,9 @@ export function buildApp({
   neo4j = createNeo4jClient(),
   heartbeatTtlSeconds,
   logsFlushIntervalMs,
+  callModel = createAnthropicModelClient(),
+  investigationMaxIterations,
+  investigationMaxCostUsd,
 } = {}) {
   const app = Fastify({ logger: true });
   // Unlike the other stores, the flusher polls redis on its own timer
@@ -60,6 +68,13 @@ export function buildApp({
   const queryLiveness = createLivenessQuery({ redis: redisClient });
   const queryGraph = createGraphQuery({ neo4j });
   const queryBlastRadius = createBlastRadiusQuery({ neo4j });
+  const persistInvestigation = createPersistInvestigationQuery({ postgres });
+  const agentTools = createAgentTools({ postgres, redis: redisClient, neo4j, influx, clickhouse });
+  const investigationLoop = createInvestigationLoop({
+    dispatch: agentTools.invoke,
+    ...(investigationMaxIterations !== undefined ? { maxIterations: investigationMaxIterations } : {}),
+    ...(investigationMaxCostUsd !== undefined ? { maxCostUsd: investigationMaxCostUsd } : {}),
+  });
   app.addHook('onClose', async () => {
     flusher.stop();
     nginxLogsFlusher.stop();
@@ -167,6 +182,65 @@ export function buildApp({
       return { error: err.message };
     }
   });
+
+  // The investigation loop's trace streams to the client as it unfolds
+  // (fleet-monitor-docs.md §7.4: "that is the demo") — hijack() hands the
+  // raw response to us so Fastify never tries to send its own reply once
+  // we've already started writing SSE frames.
+  app.post('/v1/investigate', (req, reply) => {
+    const { symptom, evalScenario } = req.body ?? {};
+    if (!symptom) {
+      reply.code(400);
+      return { error: 'investigate requires a symptom' };
+    }
+
+    reply.hijack();
+    runInvestigation({ symptom, evalScenario, res: reply.raw, log: req.log });
+  });
+
+  async function runInvestigation({ symptom, evalScenario, res, log }) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    const send = (event) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+    // Once headers are sent there's no HTTP status left to report a
+    // failure with — an 'error' frame is the only way the client (and
+    // eventually the Investigate page, #15) learns the stream ended
+    // abnormally rather than just going silent.
+    try {
+      const systemPrompt = buildSystemPrompt({ services: await listServices() });
+      const result = await investigationLoop.investigate(symptom, {
+        callModel,
+        systemPrompt,
+        tools: agentTools.list(),
+        onEvent: send,
+      });
+
+      await persistInvestigation({
+        symptom,
+        findings: result.findings,
+        trace: result.trace,
+        iterations: result.iterations,
+        toolCalls: result.toolCalls,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        costUsd: result.costUsd,
+        durationMs: result.durationMs,
+        terminated: result.terminated,
+        evalScenario,
+      });
+
+      send({ type: 'result', ...result });
+    } catch (err) {
+      log.error(err);
+      send({ type: 'error', message: err.message });
+    } finally {
+      res.end();
+    }
+  }
 
   return app;
 }

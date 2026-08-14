@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS investigations (
   output_tokens  int NOT NULL,
   cost_usd       numeric(10,5) NOT NULL,
   duration_ms    int NOT NULL,
-  terminated     text,                 -- null | 'budget_exceeded' | 'max_iterations'
+  terminated     text,                 -- null | 'budget_exceeded' | 'max_iterations' | 'no_tool_call' (server/agent/loop.js TERMINATED)
   eval_scenario  text,                 -- set when run from the harness
   created_at     timestamptz NOT NULL DEFAULT now()
 );

@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createAgentTools } from '../agent/index.js';
 
-// Smoke test for the wiring #14 (the investigation loop) will import: given
-// the same store clients buildApp() takes, createAgentTools() must produce
-// a dispatch exposing all eight tools implemented so far (#12's five thin
-// tools plus #13's three summarizing tools — submit_findings is #14's).
-test('createAgentTools wires the query layer into a dispatch with all eight tools', async () => {
+// Smoke test for the wiring #14's route uses: given the same store clients
+// buildApp() takes, createAgentTools() must produce a dispatch exposing
+// all nine tools from fleet-monitor-docs.md §7.1 — #12's five thin tools,
+// #13's three summarizing tools, and #14's submit_findings terminal tool.
+test('createAgentTools wires the query layer into a dispatch with all nine tools', async () => {
   const postgres = { query: async () => [{ name: 'web', tier: 'user-facing' }] };
   const redis = { mget: async (keys) => keys.map(() => '1') };
   const neo4j = { run: async () => [] };
@@ -25,6 +25,7 @@ test('createAgentTools wires the query layer into a dispatch with all eight tool
     'list_services',
     'query_metrics',
     'search_logs',
+    'submit_findings',
   ]);
 
   const result = await dispatch.invoke('list_services');

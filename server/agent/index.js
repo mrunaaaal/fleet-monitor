@@ -11,14 +11,15 @@ import {
   createGetBlastRadiusTool,
 } from './tools.js';
 import { createQueryMetricsTool, createSearchLogsTool, createGetLogSamplesTool } from './summarizing-tools.js';
+import { createSubmitFindingsTool } from './submit-findings-tool.js';
 import { createToolDispatch } from './dispatch.js';
 
 // Single entry point for the investigation loop (#14): takes the same
 // store clients buildApp() does, wires them through the shared query/
 // layer (never straight to a store — that's the point of the split), and
-// returns a dispatch exposing #12's five thin tools plus #13's three
-// summarizing tools. #14 adds the submit_findings terminal tool alongside
-// these.
+// returns a dispatch exposing all nine tools (fleet-monitor-docs.md §7.1):
+// #12's five thin tools, #13's three summarizing tools, and #14's
+// submit_findings terminal tool (which needs no store — it only validates).
 export function createAgentTools({ postgres, redis, neo4j, influx, clickhouse }) {
   const listServices = createListServicesQuery({ postgres });
   const queryLiveness = createLivenessQuery({ redis });
@@ -39,6 +40,7 @@ export function createAgentTools({ postgres, redis, neo4j, influx, clickhouse })
       createQueryMetricsTool({ queryMetrics }),
       createSearchLogsTool({ searchLogs }),
       createGetLogSamplesTool({ getLogSamples }),
+      createSubmitFindingsTool(),
     ],
   });
 }

@@ -3,8 +3,9 @@ import { createClient } from 'redis';
 const DEFAULT_URL = 'redis://localhost:6379';
 
 // Thin wrapper over node-redis: SET with an EX expiration for the
-// `alive:{service}` liveness key (fleet-monitor-docs.md §4.2), and MGET
-// for reading several keys at once. Connects lazily on first use.
+// `alive:{service}` liveness key (fleet-monitor-docs.md §4.2), MGET for
+// reading several keys at once, and RPUSH/LPOP-count for the `logbuf` log
+// buffer (§5.2). Connects lazily on first use.
 export function createRedisClient({
   url = process.env.REDIS_URL ?? DEFAULT_URL,
   clientFactory = createClient,
@@ -32,9 +33,22 @@ export function createRedisClient({
     return client.mGet(keys);
   }
 
-  async function close() {
-    await client.quit();
+  async function rpush(key, values) {
+    await ensureConnected();
+    return client.rPush(key, values);
   }
 
-  return { setWithTtl, mget, close };
+  async function lpopCount(key, count) {
+    await ensureConnected();
+    const values = await client.lPopCount(key, count);
+    return values ?? [];
+  }
+
+  async function close() {
+    // Quitting a client that never connected (nothing ever called
+    // ensureConnected) throws — closing is as lazy as connecting.
+    if (connected) await client.quit();
+  }
+
+  return { setWithTtl, mget, rpush, lpopCount, close };
 }

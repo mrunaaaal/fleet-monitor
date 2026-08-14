@@ -1,4 +1,5 @@
 import { FIELD_NAMES } from '../db/metrics-schema.js';
+import { escapeSqlString } from '../db/sql-escape.js';
 
 // Written once, consumed by both the Overview page and the agent's
 // query_metrics tool (fleet-monitor-docs.md §6) — the UI/agent split
@@ -52,8 +53,4 @@ export function createMetricsQuery({ influx }) {
       p95: row.p95,
     }));
   };
-}
-
-function escapeSqlString(value) {
-  return String(value).replace(/'/g, "''");
 }

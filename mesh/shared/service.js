@@ -31,6 +31,7 @@ export function createService(
     fetchImpl = fetch,
     shipMetrics = defaultShipMetrics(ingestUrl, fetchImpl),
     shipHeartbeat = defaultShipHeartbeat(ingestUrl, fetchImpl),
+    shipLogs = defaultShipLogs(ingestUrl, fetchImpl),
   } = {},
 ) {
   const { name, tier, downstream = [] } = serviceConfig;
@@ -84,11 +85,19 @@ export function createService(
     shipMetrics,
     host,
     shipHeartbeat,
+    shipLogs,
   });
   app.addHook('onClose', async () => probe.stop());
   app.addHook('onResponse', async (req, reply) => {
     if (req.routeOptions?.url !== '/work') return;
-    probe.recordRequest({ latencyMs: reply.elapsedTime, isError: reply.statusCode >= 500 });
+    const isError = reply.statusCode >= 500;
+    probe.recordRequest({ latencyMs: reply.elapsedTime, isError });
+    probe.log({
+      level: isError ? 'error' : 'info',
+      message: isError
+        ? `${name} request failed with status ${reply.statusCode}`
+        : `${name} handled /work in ${reply.elapsedTime.toFixed(1)}ms`,
+    });
   });
 
   return app;
@@ -143,5 +152,16 @@ function defaultShipHeartbeat(ingestUrl, fetchImpl) {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`heartbeat ingest responded ${res.status}`);
+  };
+}
+
+function defaultShipLogs(ingestUrl, fetchImpl) {
+  return async function shipLogs(payload) {
+    const res = await fetchImpl(`${ingestUrl}/v1/logs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`logs ingest responded ${res.status}`);
   };
 }

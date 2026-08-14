@@ -238,6 +238,55 @@ test('ships heartbeats to POST {ingestUrl}/v1/heartbeat via fetchImpl', async (t
   assert.equal(body.service, 'web');
 });
 
+test('ships a log line to POST {ingestUrl}/v1/logs on flush via fetchImpl', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const calls = [];
+  const app = createService(
+    { name: 'web', tier: 'user-facing', downstream: [] },
+    {
+      ingestUrl: 'http://fastify:3000',
+      fetchImpl: async (url, opts) => {
+        calls.push({ url: String(url), opts });
+        return { ok: true, status: 202 };
+      },
+    },
+  );
+  await app.ready();
+
+  await app.inject({ method: 'GET', url: '/work' });
+  t.mock.timers.tick(2_000);
+  await new Promise((resolve) => setImmediate(resolve));
+  await app.close();
+
+  const logCalls = calls.filter((c) => c.url === 'http://fastify:3000/v1/logs');
+  assert.equal(logCalls.length, 1);
+  assert.equal(logCalls[0].opts.method, 'POST');
+  const body = JSON.parse(logCalls[0].opts.body);
+  assert.equal(body.service, 'web');
+  assert.equal(body.lines.length, 1);
+  assert.equal(body.lines[0].level, 'info');
+});
+
+test('logs an error line for a /work request that fails', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const logged = [];
+  const app = createService(
+    { name: 'ledger-db', tier: 'datastore', downstream: [] },
+    { probeHooks: { onLogFlush: (batch) => logged.push(...batch) } },
+  );
+  await app.ready();
+  await setChaos(app, 'error');
+
+  await app.inject({ method: 'GET', url: '/work' });
+  t.mock.timers.tick(2_000);
+  await new Promise((resolve) => setImmediate(resolve));
+  await app.close();
+
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0].level, 'error');
+  assert.match(logged[0].message, /ledger-db request failed with status 500/);
+});
+
 test('records /work request latency and errors into the metrics shipped for the interval', async (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const shipped = [];

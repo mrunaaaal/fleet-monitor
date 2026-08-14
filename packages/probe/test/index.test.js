@@ -86,6 +86,22 @@ test('ships heartbeats tagged with tier when one is given', async (t) => {
   assert.equal(shipped[0].tier, 'user-facing');
 });
 
+test('ships flushed logs tagged with serviceName', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const shipped = [];
+
+  const probe = startProbe({
+    serviceName: 'web',
+    shipLogs: async (payload) => shipped.push(payload),
+  });
+
+  probe.log('hello');
+  probe.stop();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(shipped, [{ service: 'web', lines: ['hello'] }]);
+});
+
 test('works with no hooks at all', (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const probe = startProbe({ serviceName: 'web' });

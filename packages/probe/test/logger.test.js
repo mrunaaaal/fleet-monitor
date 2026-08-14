@@ -70,3 +70,27 @@ test('stop is a no-op flush when the buffer is empty', () => {
 
   assert.equal(flushes.length, 0);
 });
+
+test('ships a flushed batch tagged with serviceName via shipLogs', async () => {
+  const shipped = [];
+  const { log, stop } = startLogger({
+    serviceName: 'web',
+    shipLogs: async (payload) => shipped.push(payload),
+  });
+
+  log('one');
+  log('two');
+  stop();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(shipped, [{ service: 'web', lines: ['one', 'two'] }]);
+});
+
+test('works with no shipLogs given', () => {
+  const { log, stop } = startLogger({ serviceName: 'web' });
+
+  assert.doesNotThrow(() => {
+    log('one');
+    stop();
+  });
+});

@@ -2,7 +2,7 @@
 // root_cause_services is a list, not a single field, so a simultaneous
 // double failure is expressible as two independent causes rather than
 // forced into one answer. category is per-cause for the same reason.
-const CATEGORIES = ['latency', 'error', 'unavailable', 'resource', 'unknown'];
+export const CATEGORIES = ['latency', 'error', 'unavailable', 'resource', 'unknown'];
 const CONFIDENCES = ['high', 'medium', 'low'];
 
 export function createSubmitFindingsTool() {

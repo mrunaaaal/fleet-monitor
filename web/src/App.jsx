@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import Overview from './pages/Overview.jsx';
 import Map from './pages/Map.jsx';
+import Investigate from './pages/Investigate.jsx';
 
 const PAGES = {
   overview: { label: 'Overview', component: Overview },
   map: { label: 'Map', component: Map },
+  investigate: { label: 'Investigate', component: Investigate },
 };
 
 export default function App() {

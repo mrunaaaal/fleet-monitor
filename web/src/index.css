@@ -204,3 +204,236 @@ h3 {
   color: var(--text);
   font-size: 12px;
 }
+
+.investigate-page {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.investigate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.investigate-form label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.investigate-form textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  color: var(--text-h);
+  resize: vertical;
+}
+
+.investigate-form button {
+  align-self: flex-start;
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.investigate-form button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.investigate-trace {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trace-entry {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.trace-entry-error {
+  border-left-color: var(--down);
+}
+
+.trace-entry-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.trace-entry-name {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.trace-entry-input {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.trace-entry-body {
+  margin-top: 6px;
+}
+
+.trace-entry-body ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trace-entry-body p {
+  margin: 0;
+}
+
+.trace-service-list li,
+.trace-liveness-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.liveness-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.liveness-dot.liveness-up {
+  background: var(--up);
+}
+
+.liveness-dot.liveness-down {
+  background: var(--down);
+}
+
+.trace-metrics {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+}
+
+.trace-metrics dt {
+  color: var(--text);
+}
+
+.trace-metrics dd {
+  margin: 0;
+  font-family: var(--mono);
+}
+
+.trace-log-patterns li,
+.trace-log-samples li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.trace-log-count {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.log-level {
+  font-size: 11px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.trace-raw {
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.finding-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.finding-card-inconclusive {
+  color: var(--text);
+}
+
+.finding-summary {
+  color: var(--text-h);
+  margin: 0;
+}
+
+.finding-section h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.finding-root-causes,
+.finding-evidence {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.finding-root-causes li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.finding-service {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.finding-category,
+.finding-confidence {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.finding-evidence-source {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}

@@ -1,0 +1,240 @@
+[
+  {
+    "id": "web_slow",
+    "category": "single_service",
+    "chaos": [{ "service": "web", "mode": "slow" }],
+    "warmup_seconds": 90,
+    "symptom": "Users say the homepage takes a long time to load.",
+    "expected": {
+      "root_causes": [{ "service": "web", "category": "latency" }],
+      "affected_services": []
+    }
+  },
+  {
+    "id": "checkout_error",
+    "category": "single_service",
+    "chaos": [{ "service": "checkout", "mode": "error" }],
+    "warmup_seconds": 90,
+    "symptom": "Users report checkout is throwing errors when they submit an order.",
+    "expected": {
+      "root_causes": [{ "service": "checkout", "category": "error" }],
+      "affected_services": []
+    }
+  },
+  {
+    "id": "api_gateway_dead",
+    "category": "single_service",
+    "chaos": [{ "service": "api-gateway", "mode": "dead" }],
+    "warmup_seconds": 90,
+    "symptom": "Both the web app and checkout are completely unresponsive.",
+    "expected": {
+      "root_causes": [{ "service": "api-gateway", "category": "unavailable" }],
+      "affected_services": ["web", "checkout"]
+    }
+  },
+  {
+    "id": "auth_service_slow",
+    "category": "single_service",
+    "chaos": [{ "service": "auth-service", "mode": "slow" }],
+    "warmup_seconds": 90,
+    "symptom": "Users say logging in on the web app takes forever.",
+    "expected": {
+      "root_causes": [{ "service": "auth-service", "category": "latency" }],
+      "affected_services": ["api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "payments_error",
+    "category": "single_service",
+    "chaos": [{ "service": "payments", "mode": "error" }],
+    "warmup_seconds": 90,
+    "symptom": "Checkout is failing at the payment step for some users.",
+    "expected": {
+      "root_causes": [{ "service": "payments", "category": "error" }],
+      "affected_services": ["api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "inventory_dead",
+    "category": "single_service",
+    "chaos": [{ "service": "inventory", "mode": "dead" }],
+    "warmup_seconds": 90,
+    "symptom": "Checkout hangs indefinitely when checking item availability.",
+    "expected": {
+      "root_causes": [{ "service": "inventory", "category": "unavailable" }],
+      "affected_services": ["api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "session_store_slow",
+    "category": "single_service",
+    "chaos": [{ "service": "session-store", "mode": "slow" }],
+    "warmup_seconds": 90,
+    "symptom": "Users say staying logged in on the web app is slow and laggy.",
+    "expected": {
+      "root_causes": [{ "service": "session-store", "category": "latency" }],
+      "affected_services": ["auth-service", "api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "ledger_db_error",
+    "category": "single_service",
+    "chaos": [{ "service": "ledger-db", "mode": "error" }],
+    "warmup_seconds": 90,
+    "symptom": "Both checkout and inventory updates are failing with errors.",
+    "expected": {
+      "root_causes": [{ "service": "ledger-db", "category": "error" }],
+      "affected_services": ["payments", "inventory", "api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "checkout_dead",
+    "category": "single_service",
+    "chaos": [{ "service": "checkout", "mode": "dead" }],
+    "warmup_seconds": 90,
+    "symptom": "The checkout page never finishes loading for anyone.",
+    "expected": {
+      "root_causes": [{ "service": "checkout", "category": "unavailable" }],
+      "affected_services": []
+    }
+  },
+  {
+    "id": "ledger_slow_diamond",
+    "category": "cascade",
+    "chaos": [{ "service": "ledger-db", "mode": "slow" }],
+    "warmup_seconds": 90,
+    "symptom": "Users report checkout is timing out.",
+    "expected": {
+      "root_causes": [{ "service": "ledger-db", "category": "latency" }],
+      "affected_services": ["payments", "inventory", "api-gateway", "checkout", "web"]
+    }
+  },
+  {
+    "id": "session_store_dead_login",
+    "category": "cascade",
+    "chaos": [{ "service": "session-store", "mode": "dead" }],
+    "warmup_seconds": 90,
+    "symptom": "Users can't log into the web app — the login button just spins.",
+    "expected": {
+      "root_causes": [{ "service": "session-store", "category": "unavailable" }],
+      "affected_services": ["auth-service", "api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "ledger_dead_diamond_checkout",
+    "category": "cascade",
+    "chaos": [{ "service": "ledger-db", "mode": "dead" }],
+    "warmup_seconds": 90,
+    "symptom": "Checkout never finishes placing an order — it just spins after the user confirms.",
+    "expected": {
+      "root_causes": [{ "service": "ledger-db", "category": "unavailable" }],
+      "affected_services": ["payments", "inventory", "api-gateway", "checkout", "web"]
+    }
+  },
+  {
+    "id": "session_store_error_checkout_sessions",
+    "category": "cascade",
+    "chaos": [{ "service": "session-store", "mode": "error" }],
+    "warmup_seconds": 90,
+    "symptom": "Checkout is throwing session errors partway through, even though users are logged in.",
+    "expected": {
+      "root_causes": [{ "service": "session-store", "category": "error" }],
+      "affected_services": ["auth-service", "api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "double_failure_auth_payments",
+    "category": "double_failure",
+    "chaos": [
+      { "service": "auth-service", "mode": "dead" },
+      { "service": "payments", "mode": "error" }
+    ],
+    "warmup_seconds": 90,
+    "symptom": "Users can't log in, and separately checkout payments are failing for people who are already logged in.",
+    "expected": {
+      "root_causes": [
+        { "service": "auth-service", "category": "unavailable" },
+        { "service": "payments", "category": "error" }
+      ],
+      "affected_services": ["api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "double_failure_session_inventory",
+    "category": "double_failure",
+    "chaos": [
+      { "service": "session-store", "mode": "slow" },
+      { "service": "inventory", "mode": "dead" }
+    ],
+    "warmup_seconds": 90,
+    "symptom": "The web app feels sluggish everywhere, and checkout is timing out when checking item availability.",
+    "expected": {
+      "root_causes": [
+        { "service": "session-store", "category": "latency" },
+        { "service": "inventory", "category": "unavailable" }
+      ],
+      "affected_services": ["auth-service", "api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "red_herring_web_slow_payments_error",
+    "category": "red_herring",
+    "chaos": [
+      { "service": "web", "mode": "slow" },
+      { "service": "payments", "mode": "error" }
+    ],
+    "warmup_seconds": 90,
+    "symptom": "Checkout is failing at the payment step.",
+    "expected": {
+      "root_causes": [{ "service": "payments", "category": "error" }],
+      "affected_services": ["api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "red_herring_inventory_slow_auth_dead",
+    "category": "red_herring",
+    "chaos": [
+      { "service": "inventory", "mode": "slow" },
+      { "service": "auth-service", "mode": "dead" }
+    ],
+    "warmup_seconds": 90,
+    "symptom": "Users can't log into the web app.",
+    "expected": {
+      "root_causes": [{ "service": "auth-service", "category": "unavailable" }],
+      "affected_services": ["api-gateway", "web", "checkout"]
+    }
+  },
+  {
+    "id": "healthy_false_alarm_web_login",
+    "category": "healthy_false_alarm",
+    "chaos": [{ "service": "web", "mode": "ok" }],
+    "warmup_seconds": 60,
+    "symptom": "A user complained that login felt a little slow yesterday afternoon, but everything looks fine on our dashboards right now.",
+    "expected": {
+      "root_causes": [],
+      "affected_services": []
+    }
+  },
+  {
+    "id": "healthy_false_alarm_checkout_report",
+    "category": "healthy_false_alarm",
+    "chaos": [{ "service": "checkout", "mode": "ok" }],
+    "warmup_seconds": 60,
+    "symptom": "Someone on social media claimed checkout was broken this morning, but no one else has reported problems.",
+    "expected": {
+      "root_causes": [],
+      "affected_services": []
+    }
+  },
+  {
+    "id": "insufficient_data_vague_complaint",
+    "category": "insufficient_data",
+    "chaos": [{ "service": "ledger-db", "mode": "ok" }],
+    "warmup_seconds": 60,
+    "symptom": "One customer mentioned \"something felt off\" during checkout but didn't give any details.",
+    "expected": {
+      "root_causes": [],
+      "affected_services": []
+    }
+  }
+]

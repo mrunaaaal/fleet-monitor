@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createLogsQuery, clusterTemplate } from '../query/logs.js';
+import { createLogsQuery, createLogSamplesQuery, clusterTemplate } from '../query/logs.js';
 
 test('clusterTemplate normalizes digit runs to {N}', () => {
   assert.equal(clusterTemplate('pool exhausted, 3 of 10 connections available'), 'pool exhausted, {N} of {N} connections available');
@@ -103,4 +103,42 @@ test('searchLogs returns a null time_range when there are no matching rows', asy
   assert.equal(result.total, 0);
   assert.equal(result.time_range, null);
   assert.deepEqual(result.patterns, []);
+});
+
+test('getLogSamples requires service, from, and to', async () => {
+  const getLogSamples = createLogSamplesQuery({ clickhouse: { querySql: async () => [] } });
+
+  await assert.rejects(() => getLogSamples({}), /service/);
+  await assert.rejects(() => getLogSamples({ service: 'web' }), /from/);
+  await assert.rejects(() => getLogSamples({ service: 'web', from: 'a' }), /to/);
+});
+
+test('getLogSamples filters the same way as searchLogs and caps at 5 rows, most recent first', async () => {
+  const calls = [];
+  const getLogSamples = createLogSamplesQuery({
+    clickhouse: { querySql: async (sql) => (calls.push(sql), []) },
+  });
+
+  await getLogSamples({ service: 'web', level: 'error', pattern: 'timeout', from: '2024-01-01T00:00:00Z', to: '2024-01-01T01:00:00Z' });
+
+  assert.match(calls[0], /service = 'web'/);
+  assert.match(calls[0], /level = 'error'/);
+  assert.match(calls[0], /position\(message, 'timeout'\) > 0/);
+  assert.match(calls[0], /ORDER BY ts DESC/);
+  assert.match(calls[0], /LIMIT 5/);
+});
+
+test('getLogSamples returns raw rows, unclustered, truncating long messages to 200 chars', async () => {
+  const longMessage = 'x'.repeat(250);
+  const rows = [
+    { ts: '2024-01-01 00:00:02.000', level: 'error', message: 'short message' },
+    { ts: '2024-01-01 00:00:01.000', level: 'error', message: longMessage },
+  ];
+  const getLogSamples = createLogSamplesQuery({ clickhouse: { querySql: async () => rows } });
+
+  const result = await getLogSamples({ service: 'web', from: 'a', to: 'b' });
+
+  assert.deepEqual(result[0], { ts: '2024-01-01 00:00:02.000', level: 'error', message: 'short message' });
+  assert.equal(result[1].message.length, 201); // 200 chars + a truncation marker
+  assert.ok(result[1].message.startsWith('x'.repeat(200)));
 });

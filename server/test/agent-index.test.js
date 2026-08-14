@@ -4,13 +4,16 @@ import { createAgentTools } from '../agent/index.js';
 
 // Smoke test for the wiring #14 (the investigation loop) will import: given
 // the same store clients buildApp() takes, createAgentTools() must produce
-// a dispatch exposing exactly the five tools this ticket implements.
-test('createAgentTools wires the query layer into a dispatch with the five thin tools', async () => {
+// a dispatch exposing all eight tools implemented so far (#12's five thin
+// tools plus #13's three summarizing tools — submit_findings is #14's).
+test('createAgentTools wires the query layer into a dispatch with all eight tools', async () => {
   const postgres = { query: async () => [{ name: 'web', tier: 'user-facing' }] };
   const redis = { mget: async (keys) => keys.map(() => '1') };
   const neo4j = { run: async () => [] };
+  const influx = { querySql: async () => [] };
+  const clickhouse = { querySql: async () => [] };
 
-  const dispatch = createAgentTools({ postgres, redis, neo4j });
+  const dispatch = createAgentTools({ postgres, redis, neo4j, influx, clickhouse });
 
   const names = dispatch.list().map((t) => t.name).sort();
   assert.deepEqual(names, [
@@ -18,7 +21,10 @@ test('createAgentTools wires the query layer into a dispatch with the five thin 
     'find_shared_dependency',
     'get_blast_radius',
     'get_dependencies',
+    'get_log_samples',
     'list_services',
+    'query_metrics',
+    'search_logs',
   ]);
 
   const result = await dispatch.invoke('list_services');

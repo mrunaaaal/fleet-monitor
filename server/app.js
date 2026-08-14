@@ -10,6 +10,14 @@ import { createLogsIngestHandler } from './ingest/logs.js';
 import { createNginxLogsIngestHandler } from './ingest/nginx-logs.js';
 import { createTopologyIngestHandler } from './ingest/topology.js';
 import { startFlusher, NGINX_LOGBUF_KEY } from './ingest/flusher.js';
+import { createListServicesQuery } from './query/services.js';
+import { createMetricsQuery } from './query/metrics.js';
+
+// Query-string values arrive as strings or are absent; queryMetrics wants
+// either a real number or undefined (to fall through to its own default).
+function parseOptionalNumber(value) {
+  return value === undefined ? undefined : Number(value);
+}
 
 export function buildApp({
   influx = createInfluxClient(),
@@ -45,6 +53,8 @@ export function buildApp({
   const ingestLogs = createLogsIngestHandler({ redis: redisClient, flusher });
   const ingestNginxLogs = createNginxLogsIngestHandler({ redis: redisClient, flusher: nginxLogsFlusher });
   const ingestTopology = createTopologyIngestHandler({ neo4j });
+  const listServices = createListServicesQuery({ postgres });
+  const queryMetrics = createMetricsQuery({ influx });
   app.addHook('onClose', async () => {
     flusher.stop();
     nginxLogsFlusher.stop();
@@ -106,6 +116,23 @@ export function buildApp({
     }
     reply.code(202);
     return { status: 'accepted' };
+  });
+
+  app.get('/v1/services', async () => listServices());
+
+  app.get('/v1/metrics', async (req, reply) => {
+    const { service, field, windowMinutes, bucketMinutes } = req.query ?? {};
+    try {
+      return await queryMetrics({
+        service,
+        field,
+        windowMinutes: parseOptionalNumber(windowMinutes),
+        bucketMinutes: parseOptionalNumber(bucketMinutes),
+      });
+    } catch (err) {
+      reply.code(400);
+      return { error: err.message };
+    }
   });
 
   return app;

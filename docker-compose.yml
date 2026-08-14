@@ -11,7 +11,9 @@ x-mesh-service: &mesh-service
 
 services:
   nginx:
-    build: ./nginx
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
     ports:
       - "80:80"
       - "443:443"

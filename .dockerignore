@@ -1,6 +1,7 @@
 # Applies to build contexts rooted at the repo root (the mesh services,
-# which need both mesh/ and packages/probe/ in one context). server/ and
-# nginx/ build with their own directory as context and have no bearing here.
+# which need both mesh/ and packages/probe/ in one context; nginx, which
+# needs web/ to build the frontend). server/ builds with its own directory
+# as context and has no bearing here.
 **/node_modules
 **/test
 .git

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createService } from '../shared/service.js';
 import { METRICS_INTERVAL_MS } from '../../packages/probe/metrics.js';
 import { HEARTBEAT_INTERVAL_MS } from '../../packages/probe/heartbeat.js';
+import { DEPS_INTERVAL_MS } from '../../packages/probe/deps.js';
 
 async function listen(app) {
   await app.listen({ host: '127.0.0.1', port: 0 });
@@ -236,6 +237,32 @@ test('ships heartbeats to POST {ingestUrl}/v1/heartbeat via fetchImpl', async (t
   assert.equal(heartbeatCalls[0].opts.method, 'POST');
   const body = JSON.parse(heartbeatCalls[0].opts.body);
   assert.equal(body.service, 'web');
+});
+
+test('ships topology to POST {ingestUrl}/v1/topology via fetchImpl', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const calls = [];
+  const app = createService(
+    { name: 'web', tier: 'user-facing', downstream: [{ name: 'api-gateway', query: { feature: 'web' } }] },
+    {
+      ingestUrl: 'http://fastify:3000',
+      fetchImpl: async (url, opts) => {
+        calls.push({ url: String(url), opts });
+        return { ok: true, status: 202 };
+      },
+    },
+  );
+  await app.ready();
+
+  t.mock.timers.tick(DEPS_INTERVAL_MS);
+  await new Promise((resolve) => setImmediate(resolve));
+  await app.close();
+
+  const topologyCalls = calls.filter((c) => c.url === 'http://fastify:3000/v1/topology');
+  assert.equal(topologyCalls.length, 1);
+  assert.equal(topologyCalls[0].opts.method, 'POST');
+  const body = JSON.parse(topologyCalls[0].opts.body);
+  assert.deepEqual(body, { service: 'web', tier: 'user-facing', downstream: ['api-gateway'] });
 });
 
 test('ships a log line to POST {ingestUrl}/v1/logs on flush via fetchImpl', async (t) => {

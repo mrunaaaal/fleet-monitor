@@ -32,6 +32,7 @@ export function createService(
     shipMetrics = defaultShipMetrics(ingestUrl, fetchImpl),
     shipHeartbeat = defaultShipHeartbeat(ingestUrl, fetchImpl),
     shipLogs = defaultShipLogs(ingestUrl, fetchImpl),
+    shipTopology = defaultShipTopology(ingestUrl, fetchImpl),
   } = {},
 ) {
   const { name, tier, downstream = [] } = serviceConfig;
@@ -86,6 +87,7 @@ export function createService(
     host,
     shipHeartbeat,
     shipLogs,
+    shipTopology,
   });
   app.addHook('onClose', async () => probe.stop());
   app.addHook('onResponse', async (req, reply) => {
@@ -163,5 +165,16 @@ function defaultShipLogs(ingestUrl, fetchImpl) {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`logs ingest responded ${res.status}`);
+  };
+}
+
+function defaultShipTopology(ingestUrl, fetchImpl) {
+  return async function shipTopology(payload) {
+    const res = await fetchImpl(`${ingestUrl}/v1/topology`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`topology ingest responded ${res.status}`);
   };
 }

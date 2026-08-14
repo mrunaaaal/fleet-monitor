@@ -1,0 +1,2 @@
+CREATE CONSTRAINT service_name IF NOT EXISTS
+FOR (s:Service) REQUIRE s.name IS UNIQUE

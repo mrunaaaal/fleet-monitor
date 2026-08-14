@@ -102,6 +102,24 @@ test('ships flushed logs tagged with serviceName', async (t) => {
   assert.deepEqual(shipped, [{ service: 'web', lines: ['hello'] }]);
 });
 
+test('ships topology tagged with serviceName, tier, and downstream targets', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const shipped = [];
+
+  const probe = startProbe({
+    serviceName: 'web',
+    tier: 'user-facing',
+    downstream: ['api-gateway'],
+    shipTopology: async (payload) => shipped.push(payload),
+  });
+
+  t.mock.timers.tick(60_000);
+  await new Promise((resolve) => setImmediate(resolve));
+  probe.stop();
+
+  assert.deepEqual(shipped, [{ service: 'web', tier: 'user-facing', downstream: ['api-gateway'] }]);
+});
+
 test('works with no hooks at all', (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const probe = startProbe({ serviceName: 'web' });

@@ -3,7 +3,11 @@ x-mesh-service: &mesh-service
     context: .
     dockerfile: mesh/Dockerfile
   healthcheck:
-    test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/health"]
+    # 127.0.0.1, not localhost: these containers have IPv6 loopback (::1)
+    # configured but the Node server only binds 0.0.0.0 (IPv4), so a host
+    # where /etc/hosts or getaddrinfo prefers AAAA records makes wget try
+    # ::1 first and fail with connection refused even though the server is up.
+    test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/health"]
     interval: 5s
     timeout: 3s
     retries: 5
@@ -24,7 +28,8 @@ services:
       fastify:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/healthz"]
+      # 127.0.0.1: see the mesh-service healthcheck comment above.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/healthz"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -74,7 +79,9 @@ services:
       neo4j:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/health"]
+      # See the mesh-service healthcheck comment above: 127.0.0.1, not
+      # localhost, to avoid the IPv6-loopback-vs-IPv4-only-bind mismatch.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/health"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -228,7 +235,9 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      # 127.0.0.1: see the mesh-service healthcheck comment above — ClickHouse
+      # binds 0.0.0.0 only, so `localhost` resolving to ::1 first fails.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8123/ping"]
       interval: 5s
       timeout: 3s
       retries: 10

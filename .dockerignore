@@ -5,3 +5,8 @@
 **/node_modules
 **/test
 .git
+# Generated at container startup (nginx/docker-entrypoint.d/50-generate-certs.sh)
+# into a host-mounted volume, root-owned 600 — never COPYed by any
+# Dockerfile, and including it in the build context breaks `docker compose
+# build` for the host user once the key exists on disk.
+nginx/certs

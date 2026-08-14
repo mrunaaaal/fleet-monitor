@@ -12,6 +12,8 @@ import { createTopologyIngestHandler } from './ingest/topology.js';
 import { startFlusher, NGINX_LOGBUF_KEY } from './ingest/flusher.js';
 import { createListServicesQuery } from './query/services.js';
 import { createMetricsQuery } from './query/metrics.js';
+import { createLivenessQuery } from './query/liveness.js';
+import { createBlastRadiusQuery, createGraphQuery } from './query/topology.js';
 
 // Query-string values arrive as strings or are absent; queryMetrics wants
 // either a real number or undefined (to fall through to its own default).
@@ -55,6 +57,9 @@ export function buildApp({
   const ingestTopology = createTopologyIngestHandler({ neo4j });
   const listServices = createListServicesQuery({ postgres });
   const queryMetrics = createMetricsQuery({ influx });
+  const queryLiveness = createLivenessQuery({ redis: redisClient });
+  const queryGraph = createGraphQuery({ neo4j });
+  const queryBlastRadius = createBlastRadiusQuery({ neo4j });
   app.addHook('onClose', async () => {
     flusher.stop();
     nginxLogsFlusher.stop();
@@ -119,6 +124,34 @@ export function buildApp({
   });
 
   app.get('/v1/services', async () => listServices());
+
+  app.get('/v1/topology', async (req, reply) => {
+    try {
+      return await queryGraph();
+    } catch (err) {
+      reply.code(400);
+      return { error: err.message };
+    }
+  });
+
+  app.get('/v1/topology/blast-radius', async (req, reply) => {
+    const { service } = req.query ?? {};
+    try {
+      return await queryBlastRadius({ service });
+    } catch (err) {
+      reply.code(400);
+      return { error: err.message };
+    }
+  });
+
+  app.get('/v1/liveness', async (req) => {
+    const { services: servicesParam } = req.query ?? {};
+    const services = servicesParam
+      ? servicesParam.split(',').map((s) => s.trim()).filter(Boolean)
+      : (await listServices()).map((s) => s.name);
+    if (services.length === 0) return [];
+    return queryLiveness({ services });
+  });
 
   app.get('/v1/metrics', async (req, reply) => {
     const { service, field, windowMinutes, bucketMinutes } = req.query ?? {};

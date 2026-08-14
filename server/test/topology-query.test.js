@@ -4,6 +4,7 @@ import {
   createDependenciesQuery,
   createBlastRadiusQuery,
   createSharedDependencyQuery,
+  createGraphQuery,
 } from '../query/topology.js';
 
 function fakeInt(n) {
@@ -77,4 +78,30 @@ test('querySharedDependency walks forward from every alerting service and unwrap
 test('querySharedDependency requires a non-empty services list', async () => {
   const querySharedDependency = createSharedDependencyQuery({ neo4j: { run: async () => [] } });
   await assert.rejects(() => querySharedDependency({ services: [] }), /services/);
+});
+
+test('queryGraph returns every service as a node and every DEPENDS_ON relationship as an edge', async () => {
+  const calls = [];
+  const queryGraph = createGraphQuery({
+    neo4j: {
+      run: async (cypher, params) => {
+        calls.push({ cypher, params });
+        if (/MATCH \(a:Service\)-\[:DEPENDS_ON\]->\(b:Service\)/.test(cypher)) {
+          return [{ from: 'web', to: 'api-gateway' }];
+        }
+        return [{ service: 'web', tier: 'user-facing' }, { service: 'api-gateway', tier: 'internal' }];
+      },
+    },
+  });
+
+  const graph = await queryGraph();
+
+  assert.equal(calls.length, 2);
+  assert.deepEqual(graph, {
+    nodes: [
+      { service: 'web', tier: 'user-facing' },
+      { service: 'api-gateway', tier: 'internal' },
+    ],
+    edges: [{ from: 'web', to: 'api-gateway' }],
+  });
 });

@@ -19,3 +19,22 @@ export async function fetchMetrics({ service, field, windowMinutes = 60, bucketM
   if (!res.ok) throw new Error(`GET /v1/metrics failed: ${res.status}`);
   return res.json();
 }
+
+export async function fetchTopology() {
+  const res = await fetch(`${BASE}/v1/topology`);
+  if (!res.ok) throw new Error(`GET /v1/topology failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchBlastRadius({ service }) {
+  const params = new URLSearchParams({ service });
+  const res = await fetch(`${BASE}/v1/topology/blast-radius?${params}`);
+  if (!res.ok) throw new Error(`GET /v1/topology/blast-radius failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchLiveness() {
+  const res = await fetch(`${BASE}/v1/liveness`);
+  if (!res.ok) throw new Error(`GET /v1/liveness failed: ${res.status}`);
+  return res.json();
+}

@@ -35,6 +35,21 @@ const SHARED_DEPENDENCY_CYPHER = `
   ORDER BY service
 `;
 
+// The whole-mesh query for the Map page (spec issue #11): every service as
+// a node and every DEPENDS_ON relationship as an edge, so the frontend can
+// render the graph itself rather than assembling it from per-service calls.
+const ALL_NODES_CYPHER = `
+  MATCH (a:Service)
+  RETURN a.name AS service, a.tier AS tier
+  ORDER BY a.name
+`;
+
+const ALL_EDGES_CYPHER = `
+  MATCH (a:Service)-[:DEPENDS_ON]->(b:Service)
+  RETURN a.name AS from, b.name AS to
+  ORDER BY from, to
+`;
+
 // Aggregate/traversal-length results come back as neo4j-driver Integer
 // objects, not plain numbers — this project's values are always small
 // enough for toNumber() to be safe.
@@ -65,5 +80,18 @@ export function createSharedDependencyQuery({ neo4j }) {
     }
     const rows = await neo4j.run(SHARED_DEPENDENCY_CYPHER, { services });
     return rows.map((row) => ({ service: row.service, covers: toNumber(row.covers) }));
+  };
+}
+
+export function createGraphQuery({ neo4j }) {
+  return async function queryGraph() {
+    const [nodeRows, edgeRows] = await Promise.all([
+      neo4j.run(ALL_NODES_CYPHER),
+      neo4j.run(ALL_EDGES_CYPHER),
+    ]);
+    return {
+      nodes: nodeRows.map((row) => ({ service: row.service, tier: row.tier })),
+      edges: edgeRows.map((row) => ({ from: row.from, to: row.to })),
+    };
   };
 }

@@ -24,3 +24,8 @@ evals/results/
 # Logs and OS cruft
 *.log
 .DS_Store
+CLAUDE.md
+CONTEXT.md
+fleet-monitor-docs.md
+docs/*
+!docs/comparisons/

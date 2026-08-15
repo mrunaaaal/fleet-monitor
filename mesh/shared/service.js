@@ -135,46 +135,22 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function defaultShipMetrics(ingestUrl, fetchImpl) {
-  return async function shipMetrics(payload) {
-    const res = await fetchImpl(`${ingestUrl}/v1/metrics`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`metrics ingest responded ${res.status}`);
+// One POST-and-check-res.ok shape shared by every telemetry kind: only the
+// path and the error-message noun differ per kind.
+function shipEvent(kind, path) {
+  return function (ingestUrl, fetchImpl) {
+    return async function ship(payload) {
+      const res = await fetchImpl(`${ingestUrl}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`${kind} ingest responded ${res.status}`);
+    };
   };
 }
 
-function defaultShipHeartbeat(ingestUrl, fetchImpl) {
-  return async function shipHeartbeat(payload) {
-    const res = await fetchImpl(`${ingestUrl}/v1/heartbeat`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`heartbeat ingest responded ${res.status}`);
-  };
-}
-
-function defaultShipLogs(ingestUrl, fetchImpl) {
-  return async function shipLogs(payload) {
-    const res = await fetchImpl(`${ingestUrl}/v1/logs`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`logs ingest responded ${res.status}`);
-  };
-}
-
-function defaultShipTopology(ingestUrl, fetchImpl) {
-  return async function shipTopology(payload) {
-    const res = await fetchImpl(`${ingestUrl}/v1/topology`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`topology ingest responded ${res.status}`);
-  };
-}
+const defaultShipMetrics = shipEvent('metrics', '/v1/metrics');
+const defaultShipHeartbeat = shipEvent('heartbeat', '/v1/heartbeat');
+const defaultShipLogs = shipEvent('logs', '/v1/logs');
+const defaultShipTopology = shipEvent('topology', '/v1/topology');

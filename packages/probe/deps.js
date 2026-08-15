@@ -1,4 +1,4 @@
-import { startInterval } from './interval-trigger.js';
+import { reportOnTrigger, intervalTrigger } from './report-on-trigger.js';
 
 export const DEPS_INTERVAL_MS = 60_000;
 
@@ -15,12 +15,13 @@ export function startDepsReporter({
   serviceName,
   tier,
 } = {}) {
-  return startInterval(intervalMs, () => {
-    onTick(downstream);
-    if (shipTopology) {
-      Promise.resolve()
-        .then(() => shipTopology({ service: serviceName, ...(tier !== undefined ? { tier } : {}), downstream }))
-        .catch((err) => console.error(`[probe] failed to ship topology for ${serviceName}:`, err.message));
-    }
+  return reportOnTrigger({
+    trigger: intervalTrigger(intervalMs, () => downstream),
+    onTick,
+    ship:
+      shipTopology &&
+      ((data) => shipTopology({ service: serviceName, ...(tier !== undefined ? { tier } : {}), downstream: data })),
+    serviceName,
+    kind: 'topology',
   });
 }

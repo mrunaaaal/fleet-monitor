@@ -1,4 +1,4 @@
-import { startInterval } from './interval-trigger.js';
+import { reportOnTrigger, intervalTrigger } from './report-on-trigger.js';
 
 export const METRICS_INTERVAL_MS = 15_000;
 
@@ -71,13 +71,11 @@ export function startMetricsSampler({
   serviceName,
   host,
 } = {}) {
-  return startInterval(intervalMs, () => {
-    const metrics = recorder.sample();
-    onTick(metrics);
-    if (shipMetrics) {
-      Promise.resolve()
-        .then(() => shipMetrics({ service: serviceName, host, ...metrics }))
-        .catch((err) => console.error(`[probe] failed to ship metrics for ${serviceName}:`, err.message));
-    }
+  return reportOnTrigger({
+    trigger: intervalTrigger(intervalMs, () => recorder.sample()),
+    onTick,
+    ship: shipMetrics && ((metrics) => shipMetrics({ service: serviceName, host, ...metrics })),
+    serviceName,
+    kind: 'metrics',
   });
 }

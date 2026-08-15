@@ -1,4 +1,4 @@
-import { startInterval } from './interval-trigger.js';
+import { reportOnTrigger, intervalTrigger } from './report-on-trigger.js';
 
 export const HEARTBEAT_INTERVAL_MS = 15_000;
 
@@ -13,12 +13,11 @@ export function startHeartbeat({
   serviceName,
   tier,
 } = {}) {
-  return startInterval(intervalMs, () => {
-    onTick();
-    if (shipHeartbeat) {
-      Promise.resolve()
-        .then(() => shipHeartbeat({ service: serviceName, ...(tier !== undefined ? { tier } : {}) }))
-        .catch((err) => console.error(`[probe] failed to ship heartbeat for ${serviceName}:`, err.message));
-    }
+  return reportOnTrigger({
+    trigger: intervalTrigger(intervalMs, () => undefined),
+    onTick,
+    ship: shipHeartbeat && (() => shipHeartbeat({ service: serviceName, ...(tier !== undefined ? { tier } : {}) })),
+    serviceName,
+    kind: 'heartbeat',
   });
 }

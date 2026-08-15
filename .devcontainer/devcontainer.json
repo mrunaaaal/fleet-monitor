@@ -1,0 +1,23 @@
+{
+  "name": "Fleet Monitor (demo-on-demand)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  // The full stack (Postgres + Redis + ClickHouse + Neo4j + InfluxDB + nginx
+  // + 8 mesh services) needs real RAM — the Codespaces default 2-core/8GB
+  // machine is tight. Request 4-core/16GB; a demo run of a couple hours
+  // costs a handful of core-hours against the free monthly quota.
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb"
+  },
+  "forwardPorts": [80],
+  "portsAttributes": {
+    "80": {
+      "label": "Fleet Monitor (nginx)",
+      "onAutoForward": "openPreview"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup-env.sh"
+}

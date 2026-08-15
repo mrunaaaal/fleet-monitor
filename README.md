@@ -85,6 +85,15 @@ Then open `https://localhost` for the UI (Overview / Map / Investigate pages), o
 
 Run the eval suite (20 chaos scenarios scored against known ground truth) with `node evals/run.js`, or `node evals/run.js --replay` for the ~1-minute capture/replay iteration loop once fixtures exist. See `docs/PRD.md` and `fleet-monitor-docs.md` for the full design.
 
+### Demoing it for free (GitHub Codespaces)
+
+The full stack is too heavy for most cloud free tiers, but it fits comfortably in a Codespace (`.devcontainer/devcontainer.json` requests a 4-core/16GB machine) run only for the length of a demo — a couple of hours costs a handful of the free monthly core-hour quota.
+
+1. One-time: `./scripts/setup-codespaces-secret.sh` — walks you through setting `ANTHROPIC_API_KEY` as a Codespaces secret (everything else stays at its `.env.example` placeholder value, which is fine for a throwaway box).
+2. Create a Codespace on this repo (Code → Codespaces → Create). `.devcontainer/setup-env.sh` builds `.env` automatically on first boot.
+3. Inside the Codespace: `docker compose up --build`, then open the forwarded port-80 preview.
+4. When you're done, stop or delete the Codespace so it stops burning your quota.
+
 ## Docs
 
 - `CONTEXT.md` — domain vocabulary (symptom, root cause, blast radius, correctness/completeness)

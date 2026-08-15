@@ -1,11 +1,11 @@
 import { escapeSqlString } from '../db/sql-escape.js';
+import { summarizeByPattern } from './log-summary.js';
 
 // Written once, consumed by both a future log view and the agent's
 // search_logs tool (fleet-monitor-docs.md §6/§7.2) — counts and clustered
 // patterns, never raw lines, so a search over thousands of rows still fits
 // a small tool-output budget.
 const ROW_LIMIT = 5_000;
-const TOP_N_PATTERNS = 5;
 // get_log_samples (fleet-monitor-docs.md §7.1): "max 5 lines, truncated to
 // 200 chars each" — the raw-sample counterpart to search_logs' clustering,
 // for once the agent already knows which pattern matters.
@@ -47,7 +47,11 @@ export function createLogsQuery({ clickhouse }) {
     `.trim();
 
     const rows = await clickhouse.querySql(sql);
-    return summarize(rows);
+    return summarizeByPattern(rows, {
+      groupField: 'level',
+      groupKey: 'by_level',
+      templateFn: (row) => clusterTemplate(row.message),
+    });
   };
 }
 
@@ -76,29 +80,6 @@ export function createLogSamplesQuery({ clickhouse }) {
 function truncate(message) {
   const str = String(message);
   return str.length > MESSAGE_TRUNCATE_LENGTH ? `${str.slice(0, MESSAGE_TRUNCATE_LENGTH)}…` : str;
-}
-
-function summarize(rows) {
-  const byLevel = {};
-  const counts = new Map();
-
-  for (const row of rows) {
-    byLevel[row.level] = (byLevel[row.level] ?? 0) + 1;
-    const template = clusterTemplate(row.message);
-    counts.set(template, (counts.get(template) ?? 0) + 1);
-  }
-
-  const patterns = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, TOP_N_PATTERNS)
-    .map(([template, count]) => ({ template, count }));
-
-  return {
-    total: rows.length,
-    by_level: byLevel,
-    time_range: rows.length > 0 ? { first: rows[0].ts, last: rows[rows.length - 1].ts } : null,
-    patterns,
-  };
 }
 
 // Clustering algorithm (fleet-monitor-docs.md §7.2): normalize a message by

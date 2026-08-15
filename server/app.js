@@ -9,6 +9,7 @@ import { createHeartbeatIngestHandler } from './ingest/heartbeat.js';
 import { createLogsIngestHandler } from './ingest/logs.js';
 import { createNginxLogsIngestHandler } from './ingest/nginx-logs.js';
 import { createTopologyIngestHandler } from './ingest/topology.js';
+import { registerIngestRoute } from './ingest/register-route.js';
 import { startFlusher, NGINX_LOGBUF_KEY } from './ingest/flusher.js';
 import { createListServicesQuery } from './query/services.js';
 import { createMetricsQuery } from './query/metrics.js';
@@ -83,60 +84,11 @@ export function buildApp({
 
   app.get('/health', async () => ({ status: 'ok' }));
 
-  app.post('/v1/metrics', async (req, reply) => {
-    try {
-      await ingestMetrics(req.body ?? {});
-    } catch (err) {
-      reply.code(400);
-      return { error: err.message };
-    }
-    reply.code(202);
-    return { status: 'accepted' };
-  });
-
-  app.post('/v1/heartbeat', async (req, reply) => {
-    try {
-      await ingestHeartbeat(req.body ?? {});
-    } catch (err) {
-      reply.code(400);
-      return { error: err.message };
-    }
-    reply.code(202);
-    return { status: 'accepted' };
-  });
-
-  app.post('/v1/logs', async (req, reply) => {
-    try {
-      await ingestLogs(req.body ?? {});
-    } catch (err) {
-      reply.code(400);
-      return { error: err.message };
-    }
-    reply.code(202);
-    return { status: 'accepted' };
-  });
-
-  app.post('/v1/nginx-logs', async (req, reply) => {
-    try {
-      await ingestNginxLogs(req.body ?? {});
-    } catch (err) {
-      reply.code(400);
-      return { error: err.message };
-    }
-    reply.code(202);
-    return { status: 'accepted' };
-  });
-
-  app.post('/v1/topology', async (req, reply) => {
-    try {
-      await ingestTopology(req.body ?? {});
-    } catch (err) {
-      reply.code(400);
-      return { error: err.message };
-    }
-    reply.code(202);
-    return { status: 'accepted' };
-  });
+  registerIngestRoute(app, '/v1/metrics', ingestMetrics);
+  registerIngestRoute(app, '/v1/heartbeat', ingestHeartbeat);
+  registerIngestRoute(app, '/v1/logs', ingestLogs);
+  registerIngestRoute(app, '/v1/nginx-logs', ingestNginxLogs);
+  registerIngestRoute(app, '/v1/topology', ingestTopology);
 
   app.get('/v1/services', async () => listServices());
 

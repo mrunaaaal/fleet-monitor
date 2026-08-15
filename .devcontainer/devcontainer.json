@@ -2,7 +2,8 @@
   "name": "Fleet Monitor (demo-on-demand)",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/sshd:1": {}
   },
   // The full stack (Postgres + Redis + ClickHouse + Neo4j + InfluxDB + nginx
   // + 8 mesh services) needs real RAM — the Codespaces default 2-core/8GB

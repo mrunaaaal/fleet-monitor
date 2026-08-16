@@ -123,6 +123,52 @@ test('live mode: resets, settles, applies chaos, warms up, investigates, scores,
   assert.equal(row.categoryCorrect, true);
 });
 
+test('live mode: stamps metricsWindow.since before reset/settle so it covers this scenario only', async () => {
+  const chaos = fakeChaos();
+  const metricsWindow = {};
+  const investigate = investigateResult();
+
+  const runner = createEvalRunner({
+    mode: 'live',
+    chaos,
+    dispatch: async () => ({}),
+    callModel: async () => ({ content: [], usage: {}, costUsd: 0 }),
+    systemPrompt: 'sys',
+    tools: [],
+    settleSeconds: 5,
+    sleep: async () => {},
+    createLoop: () => ({ investigate: async () => investigate }),
+    metricsWindow,
+    now: () => new Date('2026-08-16T12:00:00.000Z'),
+  });
+
+  await runner.runScenario(scenario());
+
+  assert.equal(metricsWindow.since, '2026-08-16T12:00:00.000Z');
+});
+
+test('replay mode: leaves metricsWindow untouched (no live store to scope)', async () => {
+  const metricsWindow = {};
+  const investigate = investigateResult();
+
+  const runner = createEvalRunner({
+    mode: 'replay',
+    chaos: fakeChaos(),
+    dispatch: async () => ({}),
+    callModel: async () => ({ content: [], usage: {}, costUsd: 0 }),
+    systemPrompt: 'sys',
+    tools: [],
+    sleep: async () => {},
+    createLoop: () => ({ investigate: async () => investigate }),
+    loadFixture: async () => [],
+    metricsWindow,
+  });
+
+  await runner.runScenario(scenario());
+
+  assert.equal(metricsWindow.since, undefined);
+});
+
 test('replay mode: skips chaos and sleeping entirely, and builds its dispatch from a fixture', async () => {
   const chaos = fakeChaos();
   const sleeps = [];

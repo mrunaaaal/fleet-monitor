@@ -65,7 +65,19 @@ export async function main({ argv = process.argv.slice(2), log = console.log } =
   const clickhouse = createClickhouseClient();
 
   try {
-    const agentTools = createAgentTools({ postgres, redis, neo4j, influx, clickhouse });
+    // metricsWindow (issue #26): mutable handoff between the runner, which
+    // stamps .since at the start of each scenario, and the agent tools,
+    // which read it on every query_metrics call — keeps a scenario's
+    // metrics queries from reaching back into an earlier scenario's chaos.
+    const metricsWindow = {};
+    const agentTools = createAgentTools({
+      postgres,
+      redis,
+      neo4j,
+      influx,
+      clickhouse,
+      getMetricsSince: () => metricsWindow.since,
+    });
     const listServices = createListServicesQuery({ postgres });
     const persistInvestigation = createPersistInvestigationQuery({ postgres });
 
@@ -85,6 +97,7 @@ export async function main({ argv = process.argv.slice(2), log = console.log } =
       tools: agentTools.list(),
       persistInvestigation: mode === 'replay' ? undefined : persistInvestigation,
       fixturesDir: FIXTURES_DIR,
+      metricsWindow,
     });
 
     const rows = await runner.run(scenarios);

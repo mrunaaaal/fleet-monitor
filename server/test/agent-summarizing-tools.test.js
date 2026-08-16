@@ -40,6 +40,50 @@ test('query_metrics tool reduces bucketed rows to overall stats, trend, and larg
   assert.ok(estimateTokens(result) < TOOL_TOKEN_LIMIT);
 });
 
+// getSince (issue #26): the eval harness supplies getSince to keep each
+// scenario's query_metrics calls from reaching back into an earlier
+// scenario's chaos window; production callers omit it and get today's
+// unclamped behavior.
+
+test('query_metrics tool forwards getSince() as since when provided', async () => {
+  let captured;
+  const queryMetrics = async (args) => {
+    captured = args;
+    return [];
+  };
+  const tool = createQueryMetricsTool({ queryMetrics, getSince: () => '2026-08-16T11:50:00.000Z' });
+
+  await tool.handler({ service: 'web', field: 'cpu_pct' });
+
+  assert.deepEqual(captured, { service: 'web', field: 'cpu_pct', since: '2026-08-16T11:50:00.000Z' });
+});
+
+test('query_metrics tool omits since when getSince is absent', async () => {
+  let captured;
+  const queryMetrics = async (args) => {
+    captured = args;
+    return [];
+  };
+  const tool = createQueryMetricsTool({ queryMetrics });
+
+  await tool.handler({ service: 'web', field: 'cpu_pct' });
+
+  assert.deepEqual(captured, { service: 'web', field: 'cpu_pct' });
+});
+
+test('query_metrics tool omits since when getSince() returns undefined', async () => {
+  let captured;
+  const queryMetrics = async (args) => {
+    captured = args;
+    return [];
+  };
+  const tool = createQueryMetricsTool({ queryMetrics, getSince: () => undefined });
+
+  await tool.handler({ service: 'web', field: 'cpu_pct' });
+
+  assert.deepEqual(captured, { service: 'web', field: 'cpu_pct' });
+});
+
 test('query_metrics tool reports a down trend when the window is decreasing', async () => {
   const queryMetrics = async () => [
     { bucket: 't0', min: 50, max: 60, mean: 55, p95: 58 },

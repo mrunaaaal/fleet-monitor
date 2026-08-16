@@ -14,6 +14,7 @@ import { loadFixture as defaultLoadFixture, saveFixture as defaultSaveFixture, c
 // proves too short or too slow in practice.
 const DEFAULT_SETTLE_SECONDS = 15;
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const defaultNow = () => new Date();
 
 // category is scored separately from scoreFindings (server/eval/scorer.js
 // only scores service identity): every *named* cause's category must match
@@ -47,6 +48,8 @@ export function createEvalRunner({
   loadFixture = defaultLoadFixture,
   saveFixture = defaultSaveFixture,
   createLoop = createInvestigationLoop,
+  metricsWindow,
+  now = defaultNow,
 } = {}) {
   async function scenarioDispatch(scenario) {
     if (mode !== 'replay') return dispatch;
@@ -56,6 +59,11 @@ export function createEvalRunner({
 
   async function runScenario(scenario) {
     if (mode !== 'replay') {
+      // metricsWindow (issue #26): stamped before reset/settle so this
+      // scenario's query_metrics calls can see its own settle-through-
+      // investigation window but never an earlier scenario's chaos, which
+      // would otherwise still be inside query_metrics' 60-minute default.
+      if (metricsWindow) metricsWindow.since = now().toISOString();
       await chaos.reset();
       await sleep(settleSeconds * 1000);
       await chaos.apply(scenario.chaos);

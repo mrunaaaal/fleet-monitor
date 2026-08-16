@@ -20,7 +20,7 @@ import { createToolDispatch } from './dispatch.js';
 // returns a dispatch exposing all nine tools (fleet-monitor-docs.md §7.1):
 // #12's five thin tools, #13's three summarizing tools, and #14's
 // submit_findings terminal tool (which needs no store — it only validates).
-export function createAgentTools({ postgres, redis, neo4j, influx, clickhouse }) {
+export function createAgentTools({ postgres, redis, neo4j, influx, clickhouse, getMetricsSince }) {
   const listServices = createListServicesQuery({ postgres });
   const queryLiveness = createLivenessQuery({ redis });
   const queryDependencies = createDependenciesQuery({ neo4j });
@@ -37,7 +37,7 @@ export function createAgentTools({ postgres, redis, neo4j, influx, clickhouse })
       createGetDependenciesTool({ queryDependencies }),
       createFindSharedDependencyTool({ querySharedDependency }),
       createGetBlastRadiusTool({ queryBlastRadius }),
-      createQueryMetricsTool({ queryMetrics }),
+      createQueryMetricsTool({ queryMetrics, getSince: getMetricsSince }),
       createSearchLogsTool({ searchLogs }),
       createGetLogSamplesTool({ getLogSamples }),
       createSubmitFindingsTool(),

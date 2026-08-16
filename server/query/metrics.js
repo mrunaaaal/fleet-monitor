@@ -6,13 +6,19 @@ import { escapeSqlString } from '../db/sql-escape.js';
 // lives in a formatting layer above this, not here.
 const DEFAULT_WINDOW_MINUTES = 60;
 const DEFAULT_BUCKET_MINUTES = 5;
+// A since right at (or a hair after) query time would otherwise clamp the
+// window to ~0 and silently return no rows instead of erroring — this is
+// the same floor bucketMinutes already enforces, just applied to the
+// since-narrowed window rather than the caller-supplied one.
+const MIN_WINDOW_MINUTES = 1;
 
-export function createMetricsQuery({ influx }) {
+export function createMetricsQuery({ influx, now = () => new Date() }) {
   return async function queryMetrics({
     service,
     field,
     windowMinutes = DEFAULT_WINDOW_MINUTES,
     bucketMinutes = DEFAULT_BUCKET_MINUTES,
+    since,
   } = {}) {
     if (!service) throw new Error('queryMetrics requires a service');
     // field becomes a bare SQL identifier below, so it must come from a
@@ -30,6 +36,23 @@ export function createMetricsQuery({ influx }) {
       throw new Error('queryMetrics bucketMinutes must be a positive number');
     }
 
+    // since (issue #26): callers investigating a bounded incident window
+    // (the eval harness, one scenario at a time) pass the incident's start
+    // so a stale, still-in-range windowMinutes can't reach back into an
+    // unrelated earlier incident. It only ever narrows the window, never
+    // widens it — a since further back than windowMinutes is a no-op.
+    let effectiveWindowMinutes = windowMinutes;
+    if (since !== undefined) {
+      const sinceDate = new Date(since);
+      if (Number.isNaN(sinceDate.getTime())) {
+        throw new Error('queryMetrics since must be a valid date');
+      }
+      const minutesSinceSince = (now().getTime() - sinceDate.getTime()) / 60_000;
+      if (minutesSinceSince >= 0) {
+        effectiveWindowMinutes = Math.max(Math.min(windowMinutes, minutesSinceSince), MIN_WINDOW_MINUTES);
+      }
+    }
+
     const sql = `
       SELECT
         date_bin(INTERVAL '${bucketMinutes} minutes', time) AS bucket,
@@ -39,7 +62,7 @@ export function createMetricsQuery({ influx }) {
         approx_percentile_cont(${field}, 0.95) AS p95
       FROM metrics
       WHERE service = '${escapeSqlString(service)}'
-        AND time > now() - INTERVAL '${windowMinutes} minutes'
+        AND time > now() - INTERVAL '${effectiveWindowMinutes} minutes'
       GROUP BY bucket
       ORDER BY bucket
     `.trim();

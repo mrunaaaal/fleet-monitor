@@ -8,7 +8,11 @@
 // that line.
 const FLAT_TREND_THRESHOLD = 0.05;
 
-export function createQueryMetricsTool({ queryMetrics }) {
+// getSince is an internal seam, not part of the model-facing schema: the
+// eval harness (issue #26) uses it to pin every query_metrics call to the
+// current scenario's start, so a stale-but-in-window query can't surface
+// an earlier scenario's chaos. Production callers omit it.
+export function createQueryMetricsTool({ queryMetrics, getSince }) {
   return {
     name: 'query_metrics',
     description:
@@ -24,9 +28,12 @@ export function createQueryMetricsTool({ queryMetrics }) {
       required: ['service', 'field'],
     },
     async handler({ service, field, windowMinutes } = {}) {
-      const buckets = await queryMetrics(
-        windowMinutes === undefined ? { service, field } : { service, field, windowMinutes },
-      );
+      const args = { service, field };
+      if (windowMinutes !== undefined) args.windowMinutes = windowMinutes;
+      const since = getSince?.();
+      if (since !== undefined) args.since = since;
+
+      const buckets = await queryMetrics(args);
       return { service, field, ...reduceBuckets(buckets) };
     },
   };

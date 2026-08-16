@@ -87,3 +87,91 @@ test('queryMetrics escapes a single quote in the service name', async () => {
 
   assert.match(capturedSql, /service = 'o''brien'/);
 });
+
+// since (issue #26): eval runs chain scenarios seconds apart, far inside
+// query_metrics' 60-minute default window, so without a floor a later
+// scenario's query can still see an earlier scenario's chaos spike. since
+// clamps the window so it can never reach earlier than that timestamp.
+
+test('queryMetrics clamps the window to since when since is more recent than windowMinutes would allow', async () => {
+  let capturedSql;
+  const now = () => new Date('2026-08-16T12:00:00.000Z');
+  const queryMetrics = createMetricsQuery({
+    influx: {
+      querySql: async (sql) => {
+        capturedSql = sql;
+        return [];
+      },
+    },
+    now,
+  });
+
+  // since is 10 minutes before "now", well inside the 60-minute default window.
+  await queryMetrics({ service: 'web', field: 'cpu_pct', since: '2026-08-16T11:50:00.000Z' });
+
+  assert.match(capturedSql, /INTERVAL '10 minutes'/);
+});
+
+test('queryMetrics leaves the window at windowMinutes when since is further back than the window', async () => {
+  let capturedSql;
+  const now = () => new Date('2026-08-16T12:00:00.000Z');
+  const queryMetrics = createMetricsQuery({
+    influx: {
+      querySql: async (sql) => {
+        capturedSql = sql;
+        return [];
+      },
+    },
+    now,
+  });
+
+  // since is 2 hours before "now", further back than the 30-minute window requested.
+  await queryMetrics({ service: 'web', field: 'cpu_pct', windowMinutes: 30, since: '2026-08-16T10:00:00.000Z' });
+
+  assert.match(capturedSql, /INTERVAL '30 minutes'/);
+});
+
+test('queryMetrics rejects an invalid since', async () => {
+  const queryMetrics = createMetricsQuery({ influx: { querySql: async () => [] } });
+
+  await assert.rejects(
+    () => queryMetrics({ service: 'web', field: 'cpu_pct', since: 'not-a-date' }),
+    /since/,
+  );
+});
+
+test('queryMetrics floors the window at 1 minute when since is at (or a hair after) query time', async () => {
+  let capturedSql;
+  const now = () => new Date('2026-08-16T12:00:00.000Z');
+  const queryMetrics = createMetricsQuery({
+    influx: {
+      querySql: async (sql) => {
+        capturedSql = sql;
+        return [];
+      },
+    },
+    now,
+  });
+
+  await queryMetrics({ service: 'web', field: 'cpu_pct', since: '2026-08-16T12:00:00.000Z' });
+
+  assert.match(capturedSql, /INTERVAL '1 minutes'/);
+});
+
+test('queryMetrics ignores since when it is in the future relative to now', async () => {
+  let capturedSql;
+  const now = () => new Date('2026-08-16T12:00:00.000Z');
+  const queryMetrics = createMetricsQuery({
+    influx: {
+      querySql: async (sql) => {
+        capturedSql = sql;
+        return [];
+      },
+    },
+    now,
+  });
+
+  await queryMetrics({ service: 'web', field: 'cpu_pct', windowMinutes: 30, since: '2026-08-16T13:00:00.000Z' });
+
+  assert.match(capturedSql, /INTERVAL '30 minutes'/);
+});

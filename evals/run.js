@@ -10,6 +10,9 @@
 //   --replay            — skips chaos and warmup; tool calls are served from
 //                          fixtures captured earlier (~1 minute for all 20)
 //   --scenario=<id>     — run a single scenario instead of the full suite
+//   --max-iterations=<n> — override the investigation loop's default cap
+//                          of 10 (server/agent/loop.js); a weaker/cheaper
+//                          model may need more room to reach submit_findings
 //
 // The model is always called live, in every mode — replay only shortcuts
 // the store-backed tool calls and the mesh chaos/warmup, not the agent
@@ -43,7 +46,25 @@ const RESULTS_DIR = path.join(__dirname, 'results');
 export function parseArgs(argv) {
   const mode = argv.includes('--capture') ? 'capture' : argv.includes('--replay') ? 'replay' : 'live';
   const scenarioArg = argv.find((arg) => arg.startsWith('--scenario='));
-  return { mode, only: scenarioArg ? scenarioArg.slice('--scenario='.length) : undefined };
+
+  // maxIterations (issue #27): left undefined by default so the loop keeps
+  // its own default cap — only overridden when a weaker/cheaper model needs
+  // more room to actually reach submit_findings.
+  const maxIterationsArg = argv.find((arg) => arg.startsWith('--max-iterations='));
+  let maxIterations;
+  if (maxIterationsArg) {
+    const raw = maxIterationsArg.slice('--max-iterations='.length);
+    maxIterations = Number(raw);
+    if (!(Number.isInteger(maxIterations) && maxIterations > 0)) {
+      throw new Error(`--max-iterations must be a positive integer, got: ${raw}`);
+    }
+  }
+
+  return {
+    mode,
+    only: scenarioArg ? scenarioArg.slice('--scenario='.length) : undefined,
+    maxIterations,
+  };
 }
 
 async function selectScenarios({ only }) {
@@ -55,7 +76,7 @@ async function selectScenarios({ only }) {
 }
 
 export async function main({ argv = process.argv.slice(2), log = console.log } = {}) {
-  const { mode, only } = parseArgs(argv);
+  const { mode, only, maxIterations } = parseArgs(argv);
   const scenarios = await selectScenarios({ only });
 
   const postgres = createPostgresClient();
@@ -98,6 +119,7 @@ export async function main({ argv = process.argv.slice(2), log = console.log } =
       persistInvestigation: mode === 'replay' ? undefined : persistInvestigation,
       fixturesDir: FIXTURES_DIR,
       metricsWindow,
+      maxIterations,
     });
 
     const rows = await runner.run(scenarios);

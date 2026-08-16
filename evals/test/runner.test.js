@@ -123,6 +123,57 @@ test('live mode: resets, settles, applies chaos, warms up, investigates, scores,
   assert.equal(row.categoryCorrect, true);
 });
 
+// maxIterations (issue #27): the CLI's --max-iterations override has to
+// actually reach the loop, not just parse cleanly — this is the seam
+// evals/run.js's parseArgs -> createEvalRunner -> createLoop path runs
+// through end to end.
+test('maxIterations is forwarded from createEvalRunner into createLoop', async () => {
+  let capturedMaxIterations;
+  const investigate = investigateResult();
+
+  const runner = createEvalRunner({
+    mode: 'live',
+    chaos: fakeChaos(),
+    dispatch: async () => ({}),
+    callModel: async () => ({ content: [], usage: {}, costUsd: 0 }),
+    systemPrompt: 'sys',
+    tools: [],
+    sleep: async () => {},
+    maxIterations: 20,
+    createLoop: ({ maxIterations }) => {
+      capturedMaxIterations = maxIterations;
+      return { investigate: async () => investigate };
+    },
+  });
+
+  await runner.runScenario(scenario());
+
+  assert.equal(capturedMaxIterations, 20);
+});
+
+test('maxIterations left undefined by default so createLoop keeps its own default', async () => {
+  let capturedMaxIterations = 'not called';
+  const investigate = investigateResult();
+
+  const runner = createEvalRunner({
+    mode: 'live',
+    chaos: fakeChaos(),
+    dispatch: async () => ({}),
+    callModel: async () => ({ content: [], usage: {}, costUsd: 0 }),
+    systemPrompt: 'sys',
+    tools: [],
+    sleep: async () => {},
+    createLoop: ({ maxIterations }) => {
+      capturedMaxIterations = maxIterations;
+      return { investigate: async () => investigate };
+    },
+  });
+
+  await runner.runScenario(scenario());
+
+  assert.equal(capturedMaxIterations, undefined);
+});
+
 test('live mode: stamps metricsWindow.since before reset/settle so it covers this scenario only', async () => {
   const chaos = fakeChaos();
   const metricsWindow = {};

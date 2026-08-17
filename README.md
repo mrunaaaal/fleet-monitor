@@ -36,35 +36,27 @@ The demo mesh (`mesh/`) is eight services, each with a probe reporting metrics/l
 ## Architecture
 
 ```
-                                    ┌─────────────┐
-   traffic-generator ────────────▶ │   nginx     │ ── access logs ──▶ nginx-log-tailer
-                                    │ (TLS/proxy) │                          │
-                                    └──────┬──────┘                         │
-                                           │ /api                           │
-                                           ▼                                │
-   web ──▶ checkout ──▶ api-gateway ──┬──▶ auth-service ──▶ session-store   │
-    (demo mesh, chaos-controlled) ────┼──▶ payments ──────▶ ledger-db       │
-    each service: probe + chaos ctrl  └──▶ inventory ─────▶ ledger-db       │
-                        │                                                   │
-                        │ metrics / logs / topology / heartbeat             │
-                        ▼                                                   │
-              ┌────────────────────────────────────────┐                   │
-              │  Fastify backend (server/)              │ ◀─────────────────┘
-              │  ingest/  ─ metrics, logs, topology      │
-              │  query/   ─ shared by UI and agent       │
-              │  agent/   ─ investigation loop            │
-              └──┬────────┬────────┬─────────────────────┘
-                 │        │        │
-                 │        │        └────────────────────────▶  ClickHouse    logs
-                 │        └─────────────────────────────────▶  InfluxDB      metrics
-                 │        (Redis buffers logs; TTL liveness)   Neo4j         topology
-                 └───────────────────────────────────────────▶ Postgres      registry
-                                                                              investigations
-                                           ▲
-                                           │ SSE trace + finding card
-                                    ┌──────┴──────┐
-                                    │  web (React) │  Overview · Map · Investigate
-                                    └─────────────┘
+  traffic generator
+        │
+        ▼
+      nginx  ── access logs ──▶  nginx-log-tailer
+        │                              │
+        ▼                              │
+  demo mesh (8 fault-injectable services, see table above)
+        │                              │
+        │ metrics · logs · topology · liveness
+        ▼                              │
+  Fastify backend (server/)  ◀─────────┘
+    ingest/  →  query/  →  agent/
+        │
+        ├──▶ ClickHouse   (logs)
+        ├──▶ InfluxDB     (metrics)
+        ├──▶ Neo4j        (dependency topology)
+        └──▶ Postgres     (registry, investigations)
+        │
+        │ SSE trace + finding card
+        ▼
+  web UI (React) — Overview · Map · Investigate
 ```
 
 | Store | Job | Why |

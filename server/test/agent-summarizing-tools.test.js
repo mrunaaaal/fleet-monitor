@@ -13,9 +13,10 @@ import { estimateTokens, TOOL_TOKEN_LIMIT } from '../agent/token-budget.js';
 // #12's tools which just reshape already-tiny query results.
 
 test('query_metrics tool reduces bucketed rows to overall stats, trend, and largest-change timestamp', async () => {
-  let captured;
+  const calls = [];
   const queryMetrics = async (args) => {
-    captured = args;
+    calls.push(args);
+    if (args.field === 'req_per_sec') return [{ bucket: 't0', min: 5, max: 5, mean: 5, p95: 5 }];
     return [
       { bucket: '2024-01-01T00:00:00Z', min: 10, max: 20, mean: 15, p95: 18 },
       { bucket: '2024-01-01T00:05:00Z', min: 10, max: 22, mean: 16, p95: 20 },
@@ -29,7 +30,7 @@ test('query_metrics tool reduces bucketed rows to overall stats, trend, and larg
 
   const result = await tool.handler({ service: 'web', field: 'p95_latency_ms', windowMinutes: 15 });
 
-  assert.deepEqual(captured, { service: 'web', field: 'p95_latency_ms', windowMinutes: 15 });
+  assert.deepEqual(calls[0], { service: 'web', field: 'p95_latency_ms', windowMinutes: 15 });
   assert.equal(result.service, 'web');
   assert.equal(result.field, 'p95_latency_ms');
   assert.equal(result.min, 10);
@@ -43,45 +44,106 @@ test('query_metrics tool reduces bucketed rows to overall stats, trend, and larg
 // getSince (issue #26): the eval harness supplies getSince to keep each
 // scenario's query_metrics calls from reaching back into an earlier
 // scenario's chaos window; production callers omit it and get today's
-// unclamped behavior.
+// unclamped behavior. Both the primary field query and the traffic-status
+// query below must honor it identically, or the traffic check would leak
+// across scenarios the same way #26 fixed for the field being investigated.
 
-test('query_metrics tool forwards getSince() as since when provided', async () => {
-  let captured;
+test('query_metrics tool forwards getSince() as since to both the primary and traffic queries', async () => {
+  const calls = [];
   const queryMetrics = async (args) => {
-    captured = args;
+    calls.push(args);
     return [];
   };
   const tool = createQueryMetricsTool({ queryMetrics, getSince: () => '2026-08-16T11:50:00.000Z' });
 
   await tool.handler({ service: 'web', field: 'cpu_pct' });
 
-  assert.deepEqual(captured, { service: 'web', field: 'cpu_pct', since: '2026-08-16T11:50:00.000Z' });
+  assert.deepEqual(calls, [
+    { service: 'web', field: 'cpu_pct', since: '2026-08-16T11:50:00.000Z' },
+    { service: 'web', field: 'req_per_sec', since: '2026-08-16T11:50:00.000Z' },
+  ]);
 });
 
 test('query_metrics tool omits since when getSince is absent', async () => {
-  let captured;
+  const calls = [];
   const queryMetrics = async (args) => {
-    captured = args;
+    calls.push(args);
     return [];
   };
   const tool = createQueryMetricsTool({ queryMetrics });
 
   await tool.handler({ service: 'web', field: 'cpu_pct' });
 
-  assert.deepEqual(captured, { service: 'web', field: 'cpu_pct' });
+  assert.deepEqual(calls, [{ service: 'web', field: 'cpu_pct' }, { service: 'web', field: 'req_per_sec' }]);
 });
 
 test('query_metrics tool omits since when getSince() returns undefined', async () => {
-  let captured;
+  const calls = [];
   const queryMetrics = async (args) => {
-    captured = args;
+    calls.push(args);
     return [];
   };
   const tool = createQueryMetricsTool({ queryMetrics, getSince: () => undefined });
 
   await tool.handler({ service: 'web', field: 'cpu_pct' });
 
-  assert.deepEqual(captured, { service: 'web', field: 'cpu_pct' });
+  assert.deepEqual(calls, [{ service: 'web', field: 'cpu_pct' }, { service: 'web', field: 'req_per_sec' }]);
+});
+
+// traffic_status (issue #29): a dead service in this mesh stops completing
+// requests rather than erroring loudly, so its own p95_latency_ms/
+// error_rate look clean — nothing failed, because nothing finished. A
+// prose warning in the system prompt tried to get the model to catch this
+// by cross-checking req_per_sec itself and made things worse (traded the
+// original misdiagnosis for false alarms on legitimately idle services).
+// Doing the check in the tool instead makes it a fact the model reads,
+// not an inference it has to make correctly every time.
+
+test('query_metrics tool reports traffic_status "no_traffic" when req_per_sec is near zero, even if the requested field looks clean', async () => {
+  const queryMetrics = async ({ field }) => {
+    if (field === 'req_per_sec') return [{ bucket: 't0', min: 0, max: 0.1, mean: 0.05, p95: 0.1 }];
+    return [{ bucket: 't0', min: 0.4, max: 0.6, mean: 0.5, p95: 0.6 }];
+  };
+  const tool = createQueryMetricsTool({ queryMetrics });
+
+  const result = await tool.handler({ service: 'session-store', field: 'p95_latency_ms' });
+
+  assert.equal(result.traffic_status, 'no_traffic');
+});
+
+test('query_metrics tool reports traffic_status "active" when req_per_sec is above the no-traffic threshold', async () => {
+  const queryMetrics = async ({ field }) => {
+    if (field === 'req_per_sec') return [{ bucket: 't0', min: 4, max: 6, mean: 5, p95: 6 }];
+    return [{ bucket: 't0', min: 0.4, max: 0.6, mean: 0.5, p95: 0.6 }];
+  };
+  const tool = createQueryMetricsTool({ queryMetrics });
+
+  const result = await tool.handler({ service: 'web', field: 'p95_latency_ms' });
+
+  assert.equal(result.traffic_status, 'active');
+});
+
+test('query_metrics tool reports traffic_status "unknown" when there is no data to compute a req_per_sec mean', async () => {
+  const queryMetrics = async () => [];
+  const tool = createQueryMetricsTool({ queryMetrics });
+
+  const result = await tool.handler({ service: 'web', field: 'p95_latency_ms' });
+
+  assert.equal(result.traffic_status, 'unknown');
+});
+
+test('query_metrics tool does not double-query when the requested field is itself req_per_sec', async () => {
+  const calls = [];
+  const queryMetrics = async (args) => {
+    calls.push(args);
+    return [{ bucket: 't0', min: 0, max: 0, mean: 0, p95: 0 }];
+  };
+  const tool = createQueryMetricsTool({ queryMetrics });
+
+  const result = await tool.handler({ service: 'session-store', field: 'req_per_sec' });
+
+  assert.equal(calls.length, 1);
+  assert.equal(result.traffic_status, 'no_traffic');
 });
 
 test('query_metrics tool reports a down trend when the window is decreasing', async () => {

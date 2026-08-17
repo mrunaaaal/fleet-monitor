@@ -8,6 +8,18 @@
 // that line.
 const FLAT_TREND_THRESHOLD = 0.05;
 
+// issue #29: a dead service in this mesh stops completing requests rather
+// than erroring loudly, so its own p95_latency_ms/error_rate look clean —
+// nothing failed, because nothing finished. A prose warning in the system
+// prompt asking the model to catch this itself made things worse (traded
+// the original misdiagnosis for false alarms on legitimately idle
+// services) — see issue #29's discussion. Below this req_per_sec mean, a
+// service in an active investigation is treated as not receiving traffic;
+// above it, as receiving normal load. The traffic-generator's baseline
+// rate is ~5 req/s (fleet-monitor-docs.md §3.4), so this sits well below
+// any healthy service's floor while still catching near-zero traffic.
+const NO_TRAFFIC_REQ_PER_SEC_THRESHOLD = 0.5;
+
 // getSince is an internal seam, not part of the model-facing schema: the
 // eval harness (issue #26) uses it to pin every query_metrics call to the
 // current scenario's start, so a stale-but-in-window query can't surface
@@ -17,7 +29,10 @@ export function createQueryMetricsTool({ queryMetrics, getSince }) {
     name: 'query_metrics',
     description:
       'Get reduced metric statistics for a service over a time window: min/max/mean/p95, ' +
-      'trend direction, and the timestamp of the largest single change. Never raw datapoints.',
+      'trend direction, and the timestamp of the largest single change. Never raw datapoints. ' +
+      'Also reports traffic_status (active/no_traffic/unknown): a service that has stopped ' +
+      'completing requests can show clean-looking latency/error_rate with nothing to measure, ' +
+      'so no_traffic is itself a sign of failure, not evidence of health.',
     input_schema: {
       type: 'object',
       properties: {
@@ -34,9 +49,27 @@ export function createQueryMetricsTool({ queryMetrics, getSince }) {
       if (since !== undefined) args.since = since;
 
       const buckets = await queryMetrics(args);
-      return { service, field, ...reduceBuckets(buckets) };
+      const reduced = reduceBuckets(buckets);
+
+      // A second store query per call, doubling this tool's query load —
+      // accepted because traffic_status is the whole point of #29's fix:
+      // without it, a dead-but-heartbeating service's own clean-looking
+      // latency/error_rate silently clears it as healthy. Skipped only
+      // when the caller already asked for req_per_sec directly.
+      let reqPerSecMean = reduced.mean;
+      if (field !== 'req_per_sec') {
+        const trafficBuckets = await queryMetrics({ ...args, field: 'req_per_sec' });
+        reqPerSecMean = reduceBuckets(trafficBuckets).mean;
+      }
+
+      return { service, field, ...reduced, traffic_status: classifyTraffic(reqPerSecMean) };
     },
   };
+}
+
+function classifyTraffic(reqPerSecMean) {
+  if (reqPerSecMean === null || reqPerSecMean === undefined) return 'unknown';
+  return reqPerSecMean < NO_TRAFFIC_REQ_PER_SEC_THRESHOLD ? 'no_traffic' : 'active';
 }
 
 function reduceBuckets(buckets) {

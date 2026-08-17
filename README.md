@@ -40,12 +40,12 @@ The demo mesh (`mesh/`) is eight services, each with a probe reporting metrics/l
         │
         ▼
       nginx  ── access logs ──▶  nginx-log-tailer
-        │                              │
-        ▼                              │
+        │                               │
+        ▼                               │
   demo mesh (8 fault-injectable services, see table above)
-        │                              │
+        │                               │
         │ metrics · logs · topology · liveness
-        ▼                              │
+        ▼                               │
   Fastify backend (server/)  ◀─────────┘
     ingest/  →  query/  →  agent/
         │

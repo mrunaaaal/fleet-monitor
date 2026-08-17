@@ -16,7 +16,22 @@ Everything the agent queries during an investigation or an eval run is self-gene
 
 ## How it works
 
-A purpose-built mesh of eight services (`mesh/`) generates real telemetry and fails on command via a chaos endpoint (`ok` / `slow` / `error` / `dead`). A probe library shipped into every service reports metrics, logs, dependency topology, and liveness to a central Fastify backend (`server/`), which routes each data shape to a fit-for-purpose store. A read-only AI agent (`server/agent/`) takes a symptom in plain English, walks the dependency graph, reads evidence through the same query layer the UI uses, and reports one or more root causes with a blast radius. Because every failure is deliberately induced, an eval harness (`evals/`) scores the agent against known ground truth and publishes its failure modes — see `docs/agents/domain.md` and `CONTEXT.md` for the vocabulary this is built on.
+A purpose-built mesh of eight services (`mesh/`) generates real telemetry and fails on command via a chaos endpoint (`ok` / `slow` / `error` / `dead`). A probe library shipped into every service reports metrics, logs, dependency topology, and liveness to a central Fastify backend (`server/`), which routes each data shape to a fit-for-purpose store. A read-only AI agent (`server/agent/`) takes a symptom in plain English, walks the dependency graph, reads evidence through the same query layer the UI uses, and reports one or more root causes with their impact scope. Because every failure is deliberately induced, an eval harness (`evals/`) scores the agent against known ground truth and publishes its failure modes — see `docs/agents/domain.md` and `CONTEXT.md` for the vocabulary this is built on.
+
+## Services monitored
+
+The demo mesh (`mesh/`) is eight services, each with a probe reporting metrics/logs/topology/liveness and a chaos endpoint (`ok` / `slow` / `error` / `dead`) for inducing real failures:
+
+| Service | Tier | Role |
+|---|---|---|
+| **web** | user-facing | Front door for browsing traffic |
+| **checkout** | user-facing | Front door for purchase traffic |
+| **api-gateway** | internal | Routes web/checkout requests to auth-service, payments, and inventory |
+| **auth-service** | internal | Session checks, backed by session-store |
+| **payments** | internal | Payment processing, backed by ledger-db |
+| **inventory** | internal | Stock/availability checks, backed by ledger-db |
+| **session-store** | datastore | Session data for auth-service |
+| **ledger-db** | datastore | Shared ledger for payments and inventory |
 
 ## Architecture
 
@@ -58,7 +73,7 @@ A purpose-built mesh of eight services (`mesh/`) generates real telemetry and fa
 | **Redis** | Log write buffer, liveness TTLs | ClickHouse *fails* (`TOO_MANY_PARTS`) without batching — [write-up #2](docs/comparisons/02-batched-vs-per-row-clickhouse-inserts.md) |
 | **ClickHouse** | Log storage and search | Columnar, high-cardinality substring search beats Postgres FTS on the query shape logs actually need — [write-up #5](docs/comparisons/05-tsvector-vs-clickhouse-log-search.md) |
 | **InfluxDB 3** | Numeric time series | Retention + downsampling as config, not hand-built — [write-up #3](docs/comparisons/03-influxdb-vs-clickhouse-metrics.md) |
-| **Neo4j** | Dependency graph, blast radius | Variable-depth traversal beats a recursive CTE at depth 4 — [write-up #1](docs/comparisons/01-neo4j-vs-recursive-cte.md) |
+| **Neo4j** | Dependency graph, impact scope | Variable-depth traversal beats a recursive CTE at depth 4 — [write-up #1](docs/comparisons/01-neo4j-vs-recursive-cte.md) |
 
 ## Comparison write-ups
 
@@ -87,7 +102,7 @@ Run the eval suite (20 chaos scenarios scored against known ground truth) with `
 
 ## Docs
 
-- `CONTEXT.md` — domain vocabulary (symptom, root cause, blast radius, correctness/completeness)
+- `CONTEXT.md` — domain vocabulary (symptom, root cause, impact scope, correctness/completeness)
 - `docs/adr/` — architecture decisions (e.g. multi-root-cause eval scoring)
 - `docs/comparisons/` — the five write-ups above
 - `fleet-monitor-docs.md` — full design doc; `docs/PRD.md` — milestone breakdown
